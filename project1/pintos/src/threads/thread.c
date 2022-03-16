@@ -24,6 +24,7 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+static struct list sleep_list;
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -92,6 +93,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init(&sleep_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -320,6 +322,27 @@ thread_yield (void)
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
+}
+
+void 
+thread_sleep(void){
+  struct thread *cur = thread_current();
+  enum intr_level old_level;
+  
+  ASSERT (!intr_context ());
+  if(cur != idle_thread){
+    list_push_back(&sleep_list, &cur->elem);
+  }
+  cur->status = THREAD_BLOCKED;
+}
+
+void
+thread_wake(void){
+  printf("in thread_wake!\n");
+  printf("sleep_list empty? %d\n", list_empty(&sleep_list) ? 1 : 0);
+  if(list_empty(&sleep_list)){
+    printf("no sleep!");
+  }
 }
 
 /* Invoke function 'func' on all threads, passing along 'aux'.
