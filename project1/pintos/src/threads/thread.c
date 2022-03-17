@@ -339,13 +339,25 @@ thread_sleep(int64_t wake_tick){
   old_level = intr_disable ();
 
   if(cur != idle_thread){
-    list_push_back(&sleep_list, &cur->elem);
+    
+    cur->status = wake_tick;
+    list_insert_ordered(&sleep_list, &cur->elem, tick_less, NULL);
+    cur->status = THREAD_SLEEPING;
+    printf("here@@");
   }
-  cur->status = THREAD_SLEEPING;
-  cur->status = wake_tick;
+  
 
   schedule ();
   intr_set_level (old_level);
+}
+bool
+tick_less (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->wake_tick < b->wake_tick;
 }
 
 void
