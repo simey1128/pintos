@@ -28,6 +28,8 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+static struct list sleep_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -36,6 +38,8 @@ static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
+
+static struct lock sleep_lock;
 
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
@@ -71,6 +75,8 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -90,8 +96,10 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
+  lock_init(&sleep_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init(&sleep_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -585,3 +593,43 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+
+void thread_sleep(int64_t wake_tick){
+  struct thread *cur = thread_current();
+  lock_acquire(&sleep_lock);
+
+  list_remove(&cur->elem);
+  list_insert_ordered(&sleep_list, &cur->elem, tick_less, NULL);
+  cur->status = THREAD_SLEEPING;
+  cur->wake_tick = wake_tick;
+  
+  lock_release(&sleep_lock);
+  schedule();
+}
+
+void thread_wake(int64_t now_tick){
+  lock_acquire(&sleep_lock);
+
+  struct thread *target = list_entry(list_front(&sleep_list), struct thread, elem);
+
+  if(list_empty(&sleep_list));
+  else if(target->wake_tick <= now_tick){
+    list_remove(&target->elem);
+    list_push_back(&ready_list, &target->elem);
+    target->status = THREAD_READY;
+  } else;
+
+  lock_release(&sleep_lock);
+
+}
+
+static bool
+tick_less (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->wake_tick < b->wake_tick;
+}
