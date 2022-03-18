@@ -12,7 +12,7 @@ enum thread_status
     THREAD_READY,       /* Not running but ready to run. */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
     THREAD_DYING,        /* About to be destroyed. */
- 
+    THREAD_SLEEPING     
   };
 
 /* Thread identifier type.
@@ -94,6 +94,9 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+    /* Defined by timer_EY */
+   int64_t wake_tick;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -143,9 +146,8 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void thread_sleep(int64_t wake_tick);
-void thread_wake(int64_t now_tick);
-static bool
-tick_less (const struct list_elem *a_, const struct list_elem *b_,
-            void *aux UNUSED);
-
+void thread_wake(int64_t tick);
+bool tick_less (const struct list_elem *a,
+                             const struct list_elem *b,
+                             void *aux);
 #endif /* threads/thread.h */

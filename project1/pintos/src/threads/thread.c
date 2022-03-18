@@ -10,6 +10,7 @@
 #include "threads/palloc.h"
 #include "threads/switch.h"
 #include "threads/synch.h"
+#include "devices/timer.h"
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -23,6 +24,7 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -73,8 +75,8 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
-
-
+static struct list sleep_list;
+static int64_t sleep_tick;
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -104,6 +106,7 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -128,6 +131,7 @@ thread_start (void)
 void
 thread_tick (void) 
 {
+ 
   struct thread *t = thread_current ();
 
   /* Update statistics. */
@@ -143,6 +147,7 @@ thread_tick (void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
+  thread_wake(thread_ticks);
 }
 
 /* Prints thread statistics. */
@@ -326,6 +331,60 @@ thread_yield (void)
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
+}
+
+void 
+thread_sleep(int64_t wake_tick){
+  struct thread *cur = thread_current();
+  enum intr_level old_level;
+  
+  ASSERT (!intr_context ());
+  old_level = intr_disable ();
+
+  if(cur != idle_thread){
+    
+    cur->status = wake_tick;
+    list_insert_ordered(&sleep_list, &cur->elem, tick_less, NULL);
+    cur->status = THREAD_SLEEPING;
+    printf("here@@");
+  }
+  
+
+  schedule ();
+  intr_set_level (old_level);
+}
+bool
+tick_less (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->wake_tick < b->wake_tick;
+}
+
+void
+thread_wake(int64_t elapsed_ticks){
+  //sleep_list가 empty list인지 확인
+  if(list_empty(&sleep_list)) return;
+
+
+  //sleeplist의 첫번째 item의 tick 타임확인
+  struct thread *t = list_entry(list_head(&sleep_list), struct thread, elem);
+  if(t->wake_tick == elapsed_ticks){
+    enum intr_level old_level;
+    old_level = intr_disable ();
+
+    ASSERT(t->status == THREAD_BLOCKED);
+    list_push_back(&ready_list, &t->elem);
+    t->status = THREAD_READY;
+
+    list_pop_front(&sleep_list);
+
+    intr_set_level (old_level);
+  }
+
+
 }
 
 /* Invoke function 'func' on all threads, passing along 'aux'.
@@ -564,6 +623,7 @@ schedule (void)
   struct thread *cur = running_thread ();
   struct thread *next = next_thread_to_run ();
   struct thread *prev = NULL;
+
 
   ASSERT (intr_get_level () == INTR_OFF);
   ASSERT (cur->status != THREAD_RUNNING);
