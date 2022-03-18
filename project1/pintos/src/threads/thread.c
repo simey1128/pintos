@@ -39,8 +39,6 @@ static struct thread *initial_thread;
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
-static struct lock sleep_lock;
-
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
   {
@@ -597,30 +595,46 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 void thread_sleep(int64_t wake_tick){
   struct thread *cur = thread_current();
-  lock_acquire(&sleep_lock);
+   enum intr_level old_level;
+  
+  ASSERT (intr_get_level () == INTR_ON);
 
-  list_remove(&cur->elem);
+  old_level = intr_disable ();
+
+  // list_remove(&cur->elem);
   list_insert_ordered(&sleep_list, &cur->elem, tick_less, NULL);
-  cur->status = THREAD_SLEEPING;
+  cur->status = THREAD_BLOCKED;
   cur->wake_tick = wake_tick;
   
-  lock_release(&sleep_lock);
-  schedule();
+   schedule ();
+  intr_set_level (old_level);
+  
+  
 }
 
 void thread_wake(int64_t now_tick){
-  lock_acquire(&sleep_lock);
 
-  struct thread *target = list_entry(list_front(&sleep_list), struct thread, elem);
 
-  if(list_empty(&sleep_list));
-  else if(target->wake_tick <= now_tick){
-    list_remove(&target->elem);
-    list_push_back(&ready_list, &target->elem);
-    target->status = THREAD_READY;
-  } else;
 
-  lock_release(&sleep_lock);
+enum intr_level old_level;
+   old_level = intr_disable ();
+  if(list_empty(&sleep_list)) return;
+  struct list_elem *cursor = list_begin(&sleep_list);
+
+  while(cursor != list_end(&sleep_list)){
+    struct thread *target = list_entry(cursor, struct thread, elem);
+
+    if(target->wake_tick <=now_tick){
+      cursor = list_remove(&target->elem);
+target->status = THREAD_READY;
+      list_push_back(&ready_list, &target->elem);
+      
+    }else{
+      cursor = cursor->next;
+    }
+  }
+
+  intr_set_level (old_level);
 
 }
 
