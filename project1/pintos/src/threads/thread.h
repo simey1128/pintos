@@ -109,7 +109,8 @@ struct thread
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
-bool compare_ticks_to_wakeup(const struct list_elem*, const struct list_elem*, void *aux);
+bool compare_wake_tick(const struct list_elem*, const struct list_elem*, void *aux);
+bool compare_priority(const struct list_elem*, const struct list_elem*, void *aux);
 
 void thread_init (void);
 void thread_start (void);
