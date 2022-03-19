@@ -337,6 +337,7 @@ void thread_sleep(int64_t ticks){
   enum intr_level old_level;
 
   ASSERT (intr_get_level () == INTR_ON);
+  ASSERT(cur != idle_thread);
 
   old_level = intr_disable();
   list_insert_ordered(&sleep_list, &cur->elem, compare_ticks_to_wakeup, NULL);
@@ -352,7 +353,7 @@ void thread_wake(int64_t ticks){
 
   if(list_empty(&sleep_list))
     return;
-
+  
   old_level = intr_disable();
   struct list_elem *e = list_begin(&sleep_list);
   while(e != list_end(&sleep_list)){
