@@ -133,6 +133,7 @@ void thread_yield (void);
 void thread_sleep(int64_t);
 void thread_wake(int64_t);
 
+
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
