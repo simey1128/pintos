@@ -411,13 +411,9 @@ thread_set_priority (int new_priority)
 {
   thread_current ()->priority = new_priority;
 
-  if(list_empty(&ready_list)) thread_yield(); //#priority-change안됨
+  if(list_empty(&ready_list)) return ;
   
   struct thread *highest_thread = list_entry(list_front(&ready_list), struct thread, elem);
-  if(highest_thread == idle_thread) return; //지워도됨 ~ or ASSERT
- 
-
-  enum intr_level old_level;
 
   if(new_priority < highest_thread->priority) thread_yield();
 
