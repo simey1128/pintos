@@ -90,7 +90,7 @@ static tid_t allocate_tid (void);
 bool compare_ticks_to_wakeup(const struct list_elem *_l, const struct list_elem *_s, void *aux UNUSED){
   const struct thread *l = list_entry(_l, struct thread, elem);
   const struct thread *s = list_entry(_s, struct thread, elem);
-  return (l -> tick_to_wakeup) > (s -> tick_to_wakeup);
+  return (l -> wake_tick) > (s -> wake_tick);
 }
 
 void
@@ -340,26 +340,24 @@ void thread_sleep(int64_t ticks){
 
   old_level = intr_disable();
   list_insert_ordered(&sleep_list, &cur->elem, compare_ticks_to_wakeup, NULL);
-  printf("list size: %d\n", list_size(&sleep_list));
-  printf(" SLEEP |  tid: %d, name: %s\n", cur->tid, cur->name);
   cur -> status = THREAD_BLOCKED;
-  cur -> tick_to_wakeup = ticks;
+  cur -> wake_tick = ticks;
 
   schedule();
   intr_set_level(old_level);
 }
 
-void thread_wakeup(int64_t ticks){
+void thread_wake(int64_t ticks){
   enum intr_level old_level;
-  old_level = intr_disable();
 
   if(list_empty(&sleep_list))
     return;
 
+  old_level = intr_disable();
   struct list_elem *e = list_begin(&sleep_list);
   while(e != list_end(&sleep_list)){
     struct thread *cur = list_entry(e, struct thread, elem);
-    if(cur -> tick_to_wakeup <= ticks){
+    if(cur -> wake_tick <= ticks){
       e = list_remove(&cur->elem);
       cur -> status = THREAD_READY;
       list_push_back(&ready_list, &cur->elem);
@@ -515,7 +513,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->tick_to_wakeup = 0;
+  t->wake_tick = 0;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 }
