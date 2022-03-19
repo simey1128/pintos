@@ -390,6 +390,19 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+
+  struct list_elem *e = list_begin(&ready_list);
+  enum intr_level old_level;
+
+  old_level = intr_disable();
+  while(e != list_end(&ready_list)){
+    struct thread *cur = list_entry(e, struct thread, elem);
+    if(cur -> priority > new_priority){
+      thread_yield();
+      break;
+    }
+  }
+  intr_set_level(old_level);
 }
 
 /* Returns the current thread's priority. */
