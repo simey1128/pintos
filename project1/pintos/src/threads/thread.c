@@ -38,6 +38,7 @@ static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
+static struct lock test_lock;
 
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
@@ -224,6 +225,10 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  
+  struct thread *cur = thread_current();
+  if(priority > cur->priority)
+    thread_yield();
 
   return tid;
 }
@@ -262,10 +267,8 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   
-  if(list_empty(&ready_list)) list_push_back(&ready_list, &t->elem);
-  else list_insert_ordered(&ready_list, &t->elem, compare_priority, NULL);
+  list_insert_ordered(&ready_list, &t->elem, compare_priority, NULL);
 
-  // printf("priority is... %d\n", list_entry(list_front(&ready_list), struct thread, elem)->priority);
 
   t->status = THREAD_READY;
   intr_set_level (old_level);
@@ -337,9 +340,9 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) {
-     // list_push_back (&ready_list, &cur->elem);
+     list_push_back (&ready_list, &cur->elem);
 
-    list_insert_ordered(&ready_list, &cur->elem, compare_priority, NULL);
+    // list_insert_ordered(&ready_list, &cur->elem, compare_priority, NULL);
 
   }
    
@@ -377,8 +380,8 @@ void thread_wake(int64_t ticks){
     if(cur -> wake_tick <= ticks){
       e = list_remove(&cur->elem);
       cur -> status = THREAD_READY;
-      // list_push_back(&ready_list, &cur->elem);
-      list_insert_ordered(&ready_list, &cur->elem, compare_priority, NULL);
+      list_push_back(&ready_list, &cur->elem);
+      // list_insert_ordered(&ready_list, &cur->elem, compare_priority, NULL);
     }else
       e = e -> next;
   }
@@ -570,6 +573,7 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list)) return idle_thread;
   
+
   list_sort(&ready_list, compare_priority, NULL);
 
   return list_entry (list_pop_front (&ready_list), struct thread, elem);
