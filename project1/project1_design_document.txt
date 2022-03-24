@@ -8,9 +8,8 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Eunyoung Sim <simey1128@unist.ac.kr>
+Jaeeun Eom <eomjaeeun@unist.ac.kr>
 
 ---- PRELIMINARIES ----
 
@@ -29,14 +28,25 @@ FirstName LastName <email@domain.example>
 >> A1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+1. The tick that has to wake up.
+struct thread
+  {     
+    int64_t wake_tick;
+  };
+
+2. The thread list that call 'timer_sleep' function and unreached their on wake tick.
+static struct list sleep_list;
 
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
+After the calling, thread enters the block state, it is put to sleep in the 'sleep_list' for ticks.
+The timer interrupt handler wakes up all threads that need to wake up by calling 'thread_wake' when an interrupt occurs.
 
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
+To remove busy waiting that continuously checks its order in ready_list and burst CPU, we created 'sleep_list' and managed sleep thread separately.
 
 ---- SYNCHRONIZATION ----
 
@@ -50,6 +60,8 @@ FirstName LastName <email@domain.example>
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+Because we used 'list_insert_ordered', there is no need to store information about the thread that should wake up first as a global variable.
+
 
        PRIORITY SCHEDULING
        ===================
@@ -59,6 +71,7 @@ FirstName LastName <email@domain.example>
 >> B1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+Nothing changed.
 
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
@@ -85,6 +98,10 @@ FirstName LastName <email@domain.example>
 
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+Because the highest priority ust occupy the CPU, we have to control the situation in which the priority of an arbitrary thread is changed.
+So we modified the 'thread_set_priority' and 'thread_create'.
+When the priority of the running thread is changed, 'thread_set_priority' compare the highest priority of ready_list.
+When a new thread is created, 'thread_create' compare the priority of running thread.
 
         ADVANCED SCHEDULER
         ==================

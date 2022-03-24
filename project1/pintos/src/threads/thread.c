@@ -267,7 +267,7 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   
-  list_insert_ordered(&ready_list, &t->elem, compare_priority, NULL);
+  list_push_back(&ready_list, &t->elem);
 
 
   t->status = THREAD_READY;
@@ -341,9 +341,6 @@ thread_yield (void)
   old_level = intr_disable ();
   if (cur != idle_thread) {
      list_push_back (&ready_list, &cur->elem);
-
-    // list_insert_ordered(&ready_list, &cur->elem, compare_priority, NULL);
-
   }
    
   cur->status = THREAD_READY;
@@ -359,6 +356,7 @@ void thread_sleep(int64_t ticks){
   ASSERT(cur != idle_thread);
 
   old_level = intr_disable();
+  // list_push_back(&sleep_list, &cur->elem);
   list_insert_ordered(&sleep_list, &cur->elem, compare_ticks_to_wakeup, NULL);
   cur -> status = THREAD_BLOCKED;
   cur -> wake_tick = ticks;
@@ -368,12 +366,10 @@ void thread_sleep(int64_t ticks){
 }
 
 void thread_wake(int64_t ticks){
-  enum intr_level old_level;
 
   if(list_empty(&sleep_list))
     return;
   
-  old_level = intr_disable();
   struct list_elem *e = list_begin(&sleep_list);
   while(e != list_end(&sleep_list)){
     struct thread *cur = list_entry(e, struct thread, elem);
@@ -381,11 +377,9 @@ void thread_wake(int64_t ticks){
       e = list_remove(&cur->elem);
       cur -> status = THREAD_READY;
       list_push_back(&ready_list, &cur->elem);
-      // list_insert_ordered(&ready_list, &cur->elem, compare_priority, NULL);
     }else
       e = e -> next;
   }
-  intr_set_level(old_level);
 }
 
 /* Invoke function 'func' on all threads, passing along 'aux'.
