@@ -67,9 +67,8 @@ start_process (void *cmd_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (cmd, &if_.eip, &if_.esp);
+  success = load (file_name, &if_.eip, &if_.esp);
   //<---HERE---> stack에 argument들만 쌓기
-  printf("here\n");
   arg_stack(args, &if_.esp);
 
   /* If load failed, quit. */
@@ -89,6 +88,20 @@ start_process (void *cmd_)
 
 void arg_stack(const char *args, void **esp){
   printf("in arg_stack, args is... %s\n", args);
+
+  int num_args = 1;
+  char *token, *save_ptr, *last_arg;
+  for(token = strtok_r(args, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr)){
+    *--esp = token;
+    num_args++;
+  }
+  last_arg = &esp;
+
+  int i;
+  for(i=0; i<num_args; i++){
+    if(i==0) *--esp = 0;
+    else *--esp = (last_arg++);
+  }
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
