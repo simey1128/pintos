@@ -41,7 +41,7 @@ process_execute (const char *cmd)
 
   char *file_name, *save_ptr;
   file_name = strtok_r(cmd, " ", &save_ptr);
-  
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
@@ -52,18 +52,25 @@ process_execute (const char *cmd)
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *cmd_)
 {
-  char *file_name = file_name_;
+  char *cmd = cmd_;
   struct intr_frame if_;
   bool success;
+
+  //<---HERE---> cmd에서 이름, argument분리하기
+  char* file_name, *args;
+  file_name = strtok_r(cmd, " ", &args);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (cmd, &if_.eip, &if_.esp);
+  //<---HERE---> stack에 argument들만 쌓기
+  printf("here\n");
+  arg_stack(args, &if_.esp);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -78,6 +85,10 @@ start_process (void *file_name_)
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
+}
+
+void arg_stack(const char *args, void **esp){
+  printf("in arg_stack, args is... %s\n", args);
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
