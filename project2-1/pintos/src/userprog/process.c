@@ -70,7 +70,7 @@ start_process (void *cmd_)
   success = load (file_name, &if_.eip, &if_.esp);
   //<---HERE---> stack에 argument들만 쌓기
   arg_stack(args, &if_.esp);
-
+  hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
@@ -87,21 +87,32 @@ start_process (void *cmd_)
 }
 
 void arg_stack(const char *args, void **esp){
-  printf("in arg_stack, args is... %s\n", args);
-
-  int num_args = 1;
-  char *token, *save_ptr, *last_arg;
-  for(token = strtok_r(args, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr)){
-    *--esp = token;
-    num_args++;
+  int argc = 0;
+  char* argv[128];
+  char *tkn, *next_tkn;
+   for (tkn = strtok_r (args, " ", &next_tkn); tkn != NULL;
+        tkn = strtok_r (NULL, " ", &next_tkn)){
+      argv[argc] = tkn;
+      argc++;
   }
-  last_arg = &esp;
 
   int i;
-  for(i=0; i<num_args; i++){
-    if(i==0) *--esp = 0;
-    else *--esp = (last_arg++);
+  for(i=argc-1; i>=0; i--){
+    *esp -= 4;
+    strcpy(*esp, argv[i], strlen(argv[i])+1);
+    argv[i] = *esp;
   }
+
+  *esp -=4;
+  memset(*esp, 0, sizeof(char*));
+
+  for(i=argc-1; i>=0; i--){
+    *esp -= 4;
+    memcpy(*esp, argv[i], sizeof(char*));
+  }
+
+
+  
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -116,6 +127,8 @@ void arg_stack(const char *args, void **esp){
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+   int i;
+  for (i = 0; i < 1000000000; i++);
   return -1;
 }
 
