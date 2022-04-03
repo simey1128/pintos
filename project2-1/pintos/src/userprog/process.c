@@ -96,20 +96,36 @@ void arg_stack(const char *args, void **esp){
       argc++;
   }
 
-  int i;
+  int i, arg_size, arg_len;
+  char* argv_addr[128];
   for(i=argc-1; i>=0; i--){
-    *esp -= 4;
-    strcpy(*esp, argv[i], strlen(argv[i])+1);
-    argv[i] = *esp;
+    arg_size = strlen(argv[i]) +1;
+    arg_len += arg_size;
+    *esp -= arg_size;
+    memcpy(*esp, argv[i], arg_size);
+    printf("esp is %p\n", *esp);
+    //HERE ~ 주소 넣는거 모르겠음.....아~!!!!!!!!!!
+    argv_addr[i] = &(*esp);
+    printf("argv_addr is %p\n", argv_addr[i]);
   }
 
-  *esp -=4;
+  *esp -= arg_len % 4 != 0 ? 4 - (arg_len % 4) : 0;
+
+  *esp -= sizeof(char*);
   memset(*esp, 0, sizeof(char*));
 
+  //HERE 주소 넣어야하는데 위에서 잘 안됨..
   for(i=argc-1; i>=0; i--){
-    *esp -= 4;
-    memcpy(*esp, argv[i], sizeof(char*));
+    *esp -= sizeof(char*);
+    printf("argv[%d] is %s?\n", i, argv_addr[i]);
+    memcpy(*esp, argv_addr[i], sizeof(char*));
   }
+
+  *esp -= sizeof(char*);
+  memcpy(*esp, argv_addr, sizeof(char*));
+
+  *esp -= sizeof(char*);
+  memset(*esp, 0, sizeof(char*));
 
 
   
