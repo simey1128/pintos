@@ -101,13 +101,12 @@ void arg_stack(char **argv, int argc, void **esp){
   for(i = argc - 1; i>=0; i--){
     arg_size = strlen(argv[i]);
     *esp -= (arg_size + 1);
-    // printf("%p: %x\n", *esp, argv[i]);   // #TODO: have to delete
     memcpy(*esp, argv[i], arg_size + 1);
     tmp_addr[i] = *esp;
   }
 
   while((int) *esp % 4 != 0){
-    (*esp)--;   // *esp-- -> (*esp)--   ........ㅜㅜ
+    (*esp)--;
     *(uint8_t *)*esp = 0;
   }
 
@@ -115,21 +114,17 @@ void arg_stack(char **argv, int argc, void **esp){
   *(uint8_t *)*esp = 0;
   for(i = argc - 1; i>=0; i--){
     *esp -= sizeof(char *);
-    // printf("%p: %x\n", *esp, tmp_addr[i]);   // #TODO: have to delete
     memcpy(*esp, tmp_addr+i, sizeof(char *));
   }
 
   *tmp_addr = *esp;
   *esp -= 4;   // argv
   memcpy(*esp, tmp_addr, sizeof(void **));
-  // printf("%p: %x\n", *esp, *tmp_addr);   // #TODO: have to delete
   *esp -= sizeof(int);       // argc
   *(uint8_t *)*esp = argc;
-  // printf("%p: %x\n", *esp, argc);   // #TODO: have to delete
 
   *esp -= sizeof(void *);   // return address
   memset(*esp, 0, sizeof(void *));
-  // printf("%p: %x\n", *esp, 0);   // #TODO: have to delete
 
   free(tmp_addr);
   return;
