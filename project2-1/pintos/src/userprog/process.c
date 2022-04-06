@@ -26,76 +26,47 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
+process_execute (const char *cmd) 
 {
-  char *fn_copy, *pname;
-  char **tmp;
+  char *fn_copy;
   tid_t tid;
+
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (fn_copy, cmd, PGSIZE);
 
-  pname = strtok_r(file_name, " ", &tmp);
+  char *file_name, *save_ptr;
+  file_name = strtok_r(cmd, " ", &save_ptr);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (pname, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
 }
 
-void stack_arguments(int argc, char **argv, void **esp){
-  int i, arg_size;
-  char *tmp_addr[128];
-
-  for(i = argc - 1; i >= 0; i--){
-    arg_size = strlen(argv[i]);
-    esp = esp - (arg_size + 1);
-    memcpy(esp, argv[i], arg_size + 1);
-    tmp_addr[i] = esp;
-  }
-
-  while(((int) esp) % 4 != 0){
-    esp--;
-    *(esp) = 0;
-  }
-
-  memset(esp, 0, sizeof(char *));
-  for(i = argc - 1; i >= 0; i--){
-    esp = esp - sizeof(char *);
-    memcpy(esp, &tmp_addr[i], sizeof(char *));
-  }
-
-  esp = esp - sizeof(char **);   // argv
-  memcpy(esp, argv, sizeof(char **));
-  esp--;                                // argc
-  *(esp) = argc;
-
-  esp = esp - sizeof(void *);    // return address
-  memset(esp, 0, sizeof(void *));
-
-  return;
-}
-
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *cmd_)
 {
-  char *file_name = file_name_;
+  char *cmd = cmd_;
   struct intr_frame if_;
   bool success;
 
+  //<---HERE---> cmd에서 이름, argument분리하기
   int argc;
-  char *argv[128];
-  char *token, *next_token;
-  token = strtok_r(file_name_, " ", &next_token);
-  for(argc = 0; token != NULL; argc++){
-    argv[argc] = token;
-    token = strtok_r(NULL, " ", &next_token);
+  char **argv = malloc(sizeof(char *) * 128);
+  char *tkn, *next_tkn;
+
+  tkn = strtok_r(cmd, " ", &next_tkn);
+  for(argc = 0; tkn != NULL; argc++){
+    argv[argc] = tkn;
+    tkn = strtok_r(NULL, " ", &next_tkn);
   }
 
   /* Initialize interrupt frame and load executable. */
@@ -104,14 +75,14 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (argv[0], &if_.eip, &if_.esp);
-  hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
+  arg_stack(argv, argc, &if_.esp);
+  hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
   /* If load failed, quit. */
-  palloc_free_page (file_name);
+  palloc_free_page (argv[0]);
+  free(argv);
   if (!success) 
     thread_exit ();
-
-  stack_arguments(argc, argv, &if_.esp);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -121,6 +92,47 @@ start_process (void *file_name_)
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
+}
+
+void arg_stack(char **argv, int argc, void **esp){
+  int i, arg_size;
+  char **tmp_addr = malloc(sizeof(char *) * argc);
+
+  for(i = argc - 1; i>=0; i--){
+    arg_size = strlen(argv[i]);
+    *esp -= (arg_size + 1);
+    // printf("%p: %x\n", *esp, argv[i]);   // #TODO: have to delete
+    memcpy(*esp, argv[i], arg_size + 1);
+    tmp_addr[i] = *esp;
+  }
+
+  while((int) *esp % 4 != 0){
+    (*esp)--;   // *esp-- -> (*esp)--   ........ㅜㅜ
+    *(uint8_t *)*esp = 0;
+  }
+
+  *esp -= 4;
+  *(uint8_t *)*esp = 0;
+  for(i = argc - 1; i>=0; i--){
+    *esp -= sizeof(char *);
+    // printf("%p: %x\n", *esp, tmp_addr[i]);   // #TODO: have to delete
+    memcpy(*esp, tmp_addr+i, sizeof(char *));
+  }
+
+  *tmp_addr = *esp;
+  *esp -= 4;   // argv
+  memcpy(*esp, tmp_addr, sizeof(void **));
+  // printf("%p: %x\n", *esp, *tmp_addr);   // #TODO: have to delete
+  *esp -= sizeof(int);       // argc
+  *(uint8_t *)*esp = argc;
+  // printf("%p: %x\n", *esp, argc);   // #TODO: have to delete
+
+  *esp -= sizeof(void *);   // return address
+  memset(*esp, 0, sizeof(void *));
+  // printf("%p: %x\n", *esp, 0);   // #TODO: have to delete
+
+  free(tmp_addr);
+  return;
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -135,6 +147,8 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+   int i;
+  for (i = 0; i < 1000000000; i++);
   return -1;
 }
 

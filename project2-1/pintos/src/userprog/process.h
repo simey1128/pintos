@@ -4,7 +4,7 @@
 #include "threads/thread.h"
 
 tid_t process_execute (const char *file_name);
-void stack_arguments(int, char **, void **);
+void arg_stack(char **, int, void **);
 int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
