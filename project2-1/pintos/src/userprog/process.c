@@ -60,7 +60,7 @@ start_process (void *cmd_)
 
   //<---HERE---> cmd에서 이름, argument분리하기
   int argc;
-  char **argv = malloc(sizeof(char *) * 128);
+  char *argv[128];
   char *tkn, *next_tkn;
 
   tkn = strtok_r(cmd, " ", &next_tkn);
@@ -80,7 +80,7 @@ start_process (void *cmd_)
   hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
   /* If load failed, quit. */
   palloc_free_page (argv[0]);
-  free(argv);
+
   if (!success) 
     thread_exit ();
 
@@ -96,7 +96,7 @@ start_process (void *cmd_)
 
 void arg_stack(char **argv, int argc, void **esp){
   int i, arg_size;
-  char **tmp_addr = malloc(sizeof(char *) * argc);
+  char *tmp_addr[argc];
 
   for(i = argc - 1; i>=0; i--){
     arg_size = strlen(argv[i]);
@@ -114,7 +114,7 @@ void arg_stack(char **argv, int argc, void **esp){
   *(uint8_t *)*esp = 0;
   for(i = argc - 1; i>=0; i--){
     *esp -= sizeof(char *);
-    memcpy(*esp, tmp_addr+i, sizeof(char *));
+    memcpy(*esp, &tmp_addr[i], sizeof(char *));
   }
 
   *tmp_addr = *esp;
@@ -126,7 +126,6 @@ void arg_stack(char **argv, int argc, void **esp){
   *esp -= sizeof(void *);   // return address
   memset(*esp, 0, sizeof(void *));
 
-  free(tmp_addr);
   return;
 }
 
