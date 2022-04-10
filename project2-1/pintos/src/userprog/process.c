@@ -26,7 +26,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
+process_execute (const char *cmd) 
 {
   char *fn_copy;
   tid_t tid;
@@ -36,7 +36,10 @@ process_execute (const char *file_name)
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (fn_copy, cmd, PGSIZE);
+
+  char *file_name, *save_ptr;
+  file_name = strtok_r(cmd, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
@@ -48,21 +51,33 @@ process_execute (const char *file_name)
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *cmd_)
 {
-  char *file_name = file_name_;
+  char *cmd = cmd_;
   struct intr_frame if_;
   bool success;
+
+  int argc;
+  char *argv[128];
+  char *tkn, *next_tkn;
+
+  tkn = strtok_r(cmd, " ", &next_tkn);
+  for(argc = 0; tkn != NULL; argc++){
+    argv[argc] = tkn;
+    tkn = strtok_r(NULL, " ", &next_tkn);
+  }
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (argv[0], &if_.eip, &if_.esp);
 
+  arg_stack(argv, argc, &if_.esp);
+  // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
   /* If load failed, quit. */
-  palloc_free_page (file_name);
+  palloc_free_page (cmd);
   if (!success) 
     thread_exit ();
 
@@ -74,6 +89,42 @@ start_process (void *file_name_)
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
+}
+
+void arg_stack(char **argv, int argc, void **esp){
+  int i, arg_size;
+  char *tmp_addr[argc];
+
+  for(i = argc - 1; i>=0; i--){
+    arg_size = strlen(argv[i]);
+    *esp -= (arg_size + 1);
+    memcpy(*esp, argv[i], arg_size + 1);
+    tmp_addr[i] = *esp;
+  }
+
+  while((int) *esp % 4 != 0){
+    (*esp)--;
+    *(uint8_t *)*esp = 0;
+  }
+
+  *esp -= 4;
+  *(uint8_t *)*esp = 0;
+  for(i = argc - 1; i>=0; i--){
+    *esp -= sizeof(char *);
+    memcpy(*esp, &tmp_addr[i], sizeof(char *));
+  }
+
+  *tmp_addr = *esp;
+  *esp -= 4;   // argv
+  memcpy(*esp, tmp_addr, sizeof(void **));
+  *esp -= sizeof(int);       // argc
+  *(uint8_t *)*esp = argc;
+
+  *esp -= sizeof(void *);   // return address
+  memset(*esp, 0, sizeof(void *));
+
+  return;
+
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -88,6 +139,8 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  int i;
+  for (i = 0; i < 10000000; i++);
   return -1;
 }
 
@@ -413,7 +466,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if (!install_page (upage, kpage, writable)) 
         {
           palloc_free_page (kpage);
-          return false; 
+          return false;
         }
 
       /* Advance. */
