@@ -58,7 +58,6 @@ start_process (void *cmd_)
   struct intr_frame if_;
   bool success;
 
-  //<---HERE---> cmd에서 이름, argument분리하기
   int argc;
   char *argv[128];
   char *tkn, *next_tkn;
@@ -77,10 +76,10 @@ start_process (void *cmd_)
   success = load (argv[0], &if_.eip, &if_.esp);
 
   arg_stack(argv, argc, &if_.esp);
-  hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
+  // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
   /* If load failed, quit. */
-  palloc_free_page (argv[0]);
-
+  palloc_free_page (cmd);
+>>>>>>> restart_JE
   if (!success) 
     thread_exit ();
 
@@ -141,8 +140,8 @@ void arg_stack(char **argv, int argc, void **esp){
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-   int i;
-  for (i = 0; i < 1000000000; i++);
+  int i;
+  for (i = 0; i < 10000000; i++);
   return -1;
 }
 
@@ -468,7 +467,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if (!install_page (upage, kpage, writable)) 
         {
           palloc_free_page (kpage);
-          return false; 
+          return false;
         }
 
       /* Advance. */
