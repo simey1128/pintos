@@ -79,7 +79,6 @@ start_process (void *cmd_)
   // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
   /* If load failed, quit. */
   palloc_free_page (cmd);
->>>>>>> restart_JE
   if (!success) 
     thread_exit ();
 
