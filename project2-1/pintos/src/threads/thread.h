@@ -4,7 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-
+#include <filesys/file.h>
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -92,14 +92,20 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    
 
-#ifdef USERPROG
-    /* Owned by userprog/process.c. */
-    uint32_t *pagedir;                  /* Page directory. */
-#endif
+   // #ifdef USERPROG
+   //  /* Owned by userprog/process.c. */
+   // uint32_t *pagedir; 
+   // struct file* fd_list[128];
+   // int fd_max;                 /* Page directory. */
+   // #endif
 
     /* Owned by thread.c. */
-    unsigned magic;                     /* Detects stack overflow. */
+   uint32_t *pagedir; 
+   struct file* fd_list[128];
+   int fd_max;  
+   unsigned magic;                     /* Detects stack overflow. */
   };
 
 /* If false (default), use round-robin scheduler.
@@ -137,5 +143,7 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+int add_file(struct file*);
 
 #endif /* threads/thread.h */

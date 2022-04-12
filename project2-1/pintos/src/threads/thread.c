@@ -15,6 +15,12 @@
 #include "userprog/process.h"
 #endif
 
+struct file 
+  {
+    struct inode *inode;        /* File's inode. */
+    off_t pos;                  /* Current position. */
+    bool deny_write;            /* Has file_deny_write() been called? */
+  };
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -27,6 +33,7 @@ static struct list ready_list;
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
+
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -92,6 +99,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -204,7 +212,16 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  struct file ** fd_list = t->fd_list;
+  int i;
+  for(i=0; i<128; i++){
+    fd_list[i] = NULL;
+  }
+  t->fd_max = 2;
+
   intr_set_level (old_level);
+
+  
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -580,6 +597,20 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
+}
+
+int add_file(struct file * file){
+  struct thread* cur_thread= thread_current();
+  struct file** fd_list = cur_thread->fd_list;
+  int fd_max = cur_thread->fd_max;
+
+  // int i;
+  // for(i=2; i<=fd_max; i++){
+  //   if((fd_list[i])->inode == file->inode) fd_list[i] = NULL;
+  // }
+
+  fd_list[fd_max] = file;
+  return cur_thread->fd_max ++;
 }
 
 /* Offset of `stack' member within `struct thread'.
