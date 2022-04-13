@@ -599,20 +599,20 @@ allocate_tid (void)
   return tid;
 }
 
-int add_file(struct file * file){
+int add_fd(struct file * file){
   struct thread* cur_thread= thread_current();
   struct file** fd_list = cur_thread->fd_list;
   int fd_max = cur_thread->fd_max;
 
-  // int i;
-  // for(i=2; i<=fd_max; i++){
-  //   if((fd_list[i])->inode == file->inode) fd_list[i] = NULL;
-  // }
+  int i;
+  for(i=3; i<=fd_max; i++){
+    if((fd_list[i])->inode == file->inode) fd_list[i] = NULL;
+  }
 
   fd_list[fd_max] = file;
   return cur_thread->fd_max ++;
 }
-
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
