@@ -602,15 +602,15 @@ allocate_tid (void)
 int add_fd(struct file * file){
   struct thread* cur_thread= thread_current();
   struct file** fd_list = cur_thread->fd_list;
-  int fd_max = cur_thread->fd_max;
+  int fd_max = ++(cur_thread->fd_max) ;
 
   int i;
-  for(i=3; i<=fd_max; i++){
-    if((fd_list[i])->inode == file->inode) fd_list[i] = NULL;
+  for(i=3; i<fd_max; i++){
+    if(fd_list[i] != NULL && (fd_list[i])->inode == file->inode) fd_list[i] = NULL;
   }
 
   fd_list[fd_max] = file;
-  return cur_thread->fd_max ++;
+  return cur_thread->fd_max;
 }
 
 /* Offset of `stack' member within `struct thread'.
