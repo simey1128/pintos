@@ -40,7 +40,7 @@ process_execute (const char *cmd)
   strlcpy (fn_copy, cmd, PGSIZE);
 
   char *file_name, *save_ptr;
-  file_name = strtok_r(cmd, " ", &save_ptr);
+  file_name = _r(cmd, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
@@ -62,10 +62,10 @@ start_process (void *cmd_)
   char *argv[128];
   char *tkn, *next_tkn;
 
-  tkn = strtok_r(cmd, " ", &next_tkn);
+  tkn = _r(cmd, " ", &next_tkn);
   for(argc = 0; tkn != NULL; argc++){
     argv[argc] = tkn;
-    tkn = strtok_r(NULL, " ", &next_tkn);
+    tkn = _r(NULL, " ", &next_tkn);
   }
 
   /* Initialize interrupt frame and load executable. */

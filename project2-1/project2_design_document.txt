@@ -8,8 +8,8 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Eunyoung Sim <simey1128@unist.ac.kr>
+Jaeeun Eom <eomjaeeun@unist.ac.kr>
 
 ---- PRELIMINARIES ----
 
@@ -29,19 +29,35 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Nothing changed.
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe how you implemented argument parsing.  How do
 >> you arrange for the elements of argv[] to be in the right order?
 >> How do you avoid overflowing the stack page?
+1. 'process_execute' get command line as argument and extract name of program through parsing.
+And pass it to 'thread_create', then 'thread_create' execute 'start_process' with whole command line.
+'start_process' breaks command line into tokens separated by space and store them to 'argv[128]'.
+After loading program to memory, call 'arg_stack' and stack the arguments in 'argv[128]'.
+2. We make array 'tmp_addr[128]' that store stack address of each argument.
+We store addresses in 'tmp_addr' together when each argument is stacked.
+So we can acheive ordered arrange.
+3. #TODO
 
 ---- RATIONALE ----
 
 >> A3: Why does Pintos implement strtok_r() but not strtok()?
+'strtok' stored remaining string after first delimiter in static variable.
+So if multiple call of 'strtok' are occured, location of remaining token is same in every call.
+Thus, 'strtok' can't be used with multiple loop.
+But 'strtok_r' has the pointer that stores remaining token, so we can call it multiple times.
 
 >> A4: In Pintos, the kernel separates commands into a executable name
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
+1. Kernel execution time is shorter because parsing is done at externel of kernel.
+2. Unix can put multiple command lines at once. (Pintos have to put next command after end of previous command.)
 
            SYSTEM CALLS
            ============
@@ -51,10 +67,22 @@ FirstName LastName <email@domain.example>
 >> B1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+struct thread{
+    struct file* fd_list[128];
+    int fd_max;
+};
+1. fd_list : list of files that process has opened.
+2. fd_max : The maximum index of fd_list where opened file exists.
 
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
+1. When syscall 'open' is called, it calls add_fd that increase fd_max and store new file in fd_list of current thread.
+In other words, index of opened file in fd_list same with fd.
+
+2. It is true that uniqueness of fd has to be preserved within the entire OS.
+But in project2-1, there is no need of synchronization for fd.
+We preserved that uniqueness within a single process.
 
 ---- ALGORITHMS ----
 
