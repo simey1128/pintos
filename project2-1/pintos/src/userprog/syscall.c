@@ -86,13 +86,13 @@ int write(int fd, const void *buffer, unsigned size){
 }
 
 int open(const char* file){
-  struct file* opened = filesys_open(file);
+  struct file* file_opened = filesys_open(file);
  
-  if(opened == NULL) {
+  if(file_opened == NULL) {
     return -1;
   }
-
-  return add_fd(file);
+  
+  return add_fd(file_opened);
 }
 
 void close(int fd){
@@ -101,11 +101,12 @@ void close(int fd){
   struct thread *cur_thread = thread_current();
   struct file *file = (cur_thread->fd_list)[fd];
   
-  printf("file is null? %d\n", file == NULL ? 1 : 0);
   if(file == NULL) exit(-1);
 
   cur_thread->fd_list[fd] = NULL;
   return file_close(file);
+
+
 }
 
 int create(const char* file, unsigned initial_size){
