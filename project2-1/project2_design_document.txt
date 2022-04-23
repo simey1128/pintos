@@ -43,7 +43,9 @@ After loading program to memory, call 'arg_stack' and stack the arguments in 'ar
 2. We make array 'tmp_addr[128]' that store stack address of each argument.
 We store addresses in 'tmp_addr' together when each argument is stacked.
 So we can acheive ordered arrange.
-3. #TODO
+3. When we declare 'argv' array in 'start_process()', we restrict the size of 'argv[]' as size of stack(128).
+if size of argument exceed size of argv, we immediately call exit(-1) because it means stack overflowing.
+Using this method, we can avoid stack overflow.
 
 ---- RATIONALE ----
 
