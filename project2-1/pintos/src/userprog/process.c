@@ -64,6 +64,7 @@ start_process (void *cmd_)
 
   tkn = strtok_r(cmd, " ", &next_tkn);
   for(argc = 0; tkn != NULL; argc++){
+    if(argc>=128) exit(-1);
     argv[argc] = tkn;
     tkn = strtok_r(NULL, " ", &next_tkn);
   }
