@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include "threads/thread.h"
+#include "devices/input.h"
 static void syscall_handler (struct intr_frame *);
 
 void
@@ -32,7 +33,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
 
     case SYS_WRITE:
-      check_addr(f -> esp + 28);
+      check_addr(f -> esp + 24);
       write(*(uint32_t *) (f -> esp + 20), *(uint32_t *)(f -> esp + 24), *(uint32_t *)(f -> esp + 28));
       break;
     
@@ -52,6 +53,17 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = success;
       break;
 
+    case SYS_READ:
+      check_addr(f -> esp + 24); //TODO
+      off_t bytes_read = read(*(uint32_t *) (f -> esp + 20), *(uint32_t *)(f -> esp + 24), *(uint32_t *)(f -> esp + 28));
+      f->eax = bytes_read;
+      break;
+    
+
+
+
+
+
     default: 
       break;
   }
@@ -60,6 +72,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 void check_addr(void *uaddr){
   if(uaddr == NULL || !is_user_vaddr(uaddr)) exit(-1);
 }
+
 
 void halt(){
   shutdown_power_off();
@@ -83,6 +96,18 @@ int write(int fd, const void *buffer, unsigned size){
     return size;
   }
   return -1;
+}
+
+int read(int fd, const void *buffer, unsigned size){
+  if(fd == 0){
+    uint8_t key = input_getc();
+    return key;
+  }
+  struct file *file = (thread_current()->fd_list)[fd];
+  if(file == NULL) return -1;
+
+  off_t bytes_read = file_read(file, buffer, size);
+  return bytes_read;
 }
 
 int open(const char* file){
