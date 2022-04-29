@@ -40,6 +40,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_OPEN:
       check_addr(*(uint32_t *)(f -> esp + 4));
       int fd = open(*(uint32_t *)(f -> esp + 4));
+      printf("fd is %d\n", fd);
       f->eax = fd; 
       break;
 
@@ -54,7 +55,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
 
     case SYS_READ:
-      check_addr(f -> esp + 24); //TODO
+      check_addr(*(uint32_t *)(f -> esp + 24)); //TODO
       off_t bytes_read = read(*(uint32_t *) (f -> esp + 20), *(uint32_t *)(f -> esp + 24), *(uint32_t *)(f -> esp + 28));
       f->eax = bytes_read;
       break;
@@ -95,16 +96,23 @@ int write(int fd, const void *buffer, unsigned size){
     putbuf(buffer, size);
     return size;
   }
+  struct file *file = (thread_current()->fd_list)[fd];
+  if(file == NULL) return -1;
+
+  off_t bytes_written = file_write(file, buffer, size);
+  return bytes_written;
   return -1;
 }
 
 int read(int fd, const void *buffer, unsigned size){
+  printf("read\n");
   if(fd == 0){
     uint8_t key = input_getc();
     return key;
   }
   struct file *file = (thread_current()->fd_list)[fd];
   if(file == NULL) return -1;
+
 
   off_t bytes_read = file_read(file, buffer, size);
   return bytes_read;
