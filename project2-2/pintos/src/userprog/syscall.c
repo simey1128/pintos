@@ -34,13 +34,13 @@ syscall_handler (struct intr_frame *f UNUSED)
 
     case SYS_WRITE:
       check_addr(f -> esp + 24);
-      write(*(uint32_t *) (f -> esp + 20), *(uint32_t *)(f -> esp + 24), *(uint32_t *)(f -> esp + 28));
+      int bytes_written = write(*(uint32_t *) (f -> esp + 20), *(uint32_t *)(f -> esp + 24), *(uint32_t *)(f -> esp + 28));
+      if(bytes_written<0) exit(-1);
       break;
     
     case SYS_OPEN:
       check_addr(*(uint32_t *)(f -> esp + 4));
       int fd = open(*(uint32_t *)(f -> esp + 4));
-      printf("fd is %d\n", fd);
       f->eax = fd; 
       break;
 
@@ -57,8 +57,13 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_READ:
       check_addr(*(uint32_t *)(f -> esp + 24)); //TODO
       off_t bytes_read = read(*(uint32_t *) (f -> esp + 20), *(uint32_t *)(f -> esp + 24), *(uint32_t *)(f -> esp + 28));
+      if(bytes_read<0) exit(-1);
       f->eax = bytes_read;
       break;
+    
+    case SYS_REMOVE:
+      check_addr(*(uint32_t *)(f -> esp + 4));
+      remove(*(uint32_t *) (f -> esp + 4));
     
 
 
@@ -92,7 +97,9 @@ void exit(int status){
 }
 
 int write(int fd, const void *buffer, unsigned size){
-  if (fd == 1){
+  if(fd>128) return -1;
+
+  if(fd == 1){
     putbuf(buffer, size);
     return size;
   }
@@ -101,17 +108,18 @@ int write(int fd, const void *buffer, unsigned size){
 
   off_t bytes_written = file_write(file, buffer, size);
   return bytes_written;
-  return -1;
 }
 
 int read(int fd, const void *buffer, unsigned size){
-  printf("read\n");
+  if(fd>128) return -1;
   if(fd == 0){
     uint8_t key = input_getc();
     return key;
   }
   struct file *file = (thread_current()->fd_list)[fd];
-  if(file == NULL) return -1;
+  if(file == NULL) {
+    return -1;
+  };
 
 
   off_t bytes_read = file_read(file, buffer, size);
@@ -148,4 +156,8 @@ int create(const char* file, unsigned initial_size){
 
   return filesys_create(file, initial_size);
 
+}
+
+int remove (const char* file){
+  return filesys_remove(file);
 }
