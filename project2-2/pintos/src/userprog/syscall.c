@@ -37,7 +37,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 
     case SYS_EXEC:
       check_addr(*(uint32_t *)(f -> esp + 4));
-      if(exec(f -> esp + 4) == -1)
+      if(exec(*(uint32_t *)(f -> esp + 4)) == -1)
         exit(-1);
       break;
 
@@ -170,6 +170,7 @@ int filesize(int fd){
 }
 
 int read(int fd, void *buffer, unsigned size){
+  check_addr(buffer);
   int read_value;
   if(fd == 0){
     *(char *)buffer = input_getc();
@@ -184,6 +185,7 @@ int read(int fd, void *buffer, unsigned size){
 }
 
 int write(int fd, const void *buffer, unsigned size){
+  check_addr(buffer);
   int write_value;
   lock_acquire(&filesys_lock);
   if(fd == 1){
