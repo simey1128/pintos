@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -76,12 +77,18 @@ start_process (void *cmd_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (argv[0], &if_.eip, &if_.esp);
 
+  sema_up(&thread_current()->sema_load);
+
   arg_stack(argv, argc, &if_.esp);
   // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
   /* If load failed, quit. */
   palloc_free_page (cmd);
-  if (!success) 
+  if (!success){
+    thread_current()->is_loaded = -1;
     thread_exit ();
+  }
+
+  thread_current()->is_loaded = 1;
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -185,6 +192,23 @@ process_activate (void)
      interrupts. */
   tss_update ();
 }
+
+struct thread* get_child(int tid){ //only called by parent thread
+  struct thread* parent = thread_current();
+  struct list_elem* e;
+  for (e = list_begin (&parent->child_list); e != list_end (&parent->child_list);
+       e = list_next (e))
+  {
+    struct thread *child = list_entry (e, struct thread, elem);
+    if(child->tid == tid){
+      return child;
+    }
+  }  
+
+  return NULL;
+}
+
+
 
 /* We load ELF binaries.  The following definitions are taken
    from the ELF specification, [ELF1], more-or-less verbatim.  */

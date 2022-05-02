@@ -106,6 +106,17 @@ struct thread
    struct file* fd_list[128];
    int fd_max;  
    unsigned magic;                     /* Detects stack overflow. */
+
+   /*Project2-2*/
+   struct thread* parent;
+   struct list_elem childelem;
+   struct list child_list;
+
+   int is_loaded; // -1 == fail, 0 == not loaded, 1 == loaded
+   int is_exited; // 0 == not exited, 1 == exited
+   int exit_status;
+   struct semaphore sema_exit;
+   struct semaphore sema_load;
   };
 
 /* If false (default), use round-robin scheduler.

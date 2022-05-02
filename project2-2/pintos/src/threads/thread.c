@@ -35,6 +35,7 @@ static struct list ready_list;
 static struct list all_list;
 
 
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -218,6 +219,16 @@ thread_create (const char *name, int priority,
     fd_list[i] = NULL;
   }
   t->fd_max = 2;
+
+  // information initialization
+  t->parent = thread_current();
+  t->is_loaded = 0;
+  t->is_exited = 0;
+  sema_init(&t->sema_exit, 0);
+  sema_init(&t->sema_load, 0);
+
+  // add child to child list of parent
+  list_push_back(&t->parent->child_list, &t->child_list);
 
   intr_set_level (old_level);
 
@@ -487,6 +498,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
+
+  list_init(&t->child_list); 
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
