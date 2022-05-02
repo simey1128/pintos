@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include <filesys/file.h>
+#include "threads/synch.h"
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -115,6 +116,7 @@ struct thread
    int is_loaded; // -1 == fail, 0 == not loaded, 1 == loaded
    int is_exited; // 0 == not exited, 1 == exited
    int exit_status;
+   
    struct semaphore sema_exit;
    struct semaphore sema_load;
   };
