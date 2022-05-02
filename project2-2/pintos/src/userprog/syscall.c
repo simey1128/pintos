@@ -37,8 +37,10 @@ syscall_handler (struct intr_frame *f UNUSED)
 
     case SYS_EXEC:
       check_addr(*(uint32_t *)(f -> esp + 4));
-      if(exec(*(uint32_t *)(f -> esp + 4)) == -1)
+      pid_t pid = exec(*(uint32_t *)(f -> esp + 4));
+      if( pid== -1)
         exit(-1);
+      f->eax = pid;
       break;
 
     case SYS_WAIT:
@@ -120,22 +122,7 @@ void exit(int status){
 pid_t exec(const char *cmd_line){
   check_addr(cmd_line);
 
-  tid_t tid;
-  int size = strlen(cmd_line) + 1;
-  char *fn_copy = palloc_get_page(0);
-  if(fn_copy == NULL)
-    exit(-1);
-  strlcpy(fn_copy, cmd_line, size);
-
-  tid = process_execute(fn_copy);
-  if(tid == -1) return -1;
-
-  struct thread* child = get_child(tid);
-  sema_down(&child->sema_load);
-
-  if(child->is_loaded == -1) return -1;
-
-  return tid;
+  return process_execute(cmd_line);
 }
 
 int wait(pid_t pid){
