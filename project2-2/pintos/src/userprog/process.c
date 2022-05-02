@@ -199,7 +199,7 @@ struct thread* get_child(int tid){ //only called by parent thread
   for (e = list_begin (&parent->child_list); e != list_end (&parent->child_list);
        e = list_next (e))
   {
-    struct thread *child = list_entry (e, struct thread, elem);
+    struct thread *child = list_entry (e, struct thread, childelem);
     if(child->tid == tid){
       return child;
     }

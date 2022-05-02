@@ -228,7 +228,7 @@ thread_create (const char *name, int priority,
   sema_init(&t->sema_load, 0);
 
   // add child to child list of parent
-  list_push_back(&t->parent->child_list, &t->child_list);
+  list_push_back(&t->parent->child_list, &t->childelem);
 
   intr_set_level (old_level);
 
