@@ -145,11 +145,19 @@ void arg_stack(char **argv, int argc, void **esp){
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid ) 
 {
-  int i;
-  for (i = 0; i < 10000000; i++);
-  return -1;
+  struct thread* child = get_child(child_tid);
+  if(child == NULL) return -1;
+
+  sema_down(&child->sema_exit);
+
+  int exit_status = child->exit_status;
+
+  list_remove(&child->childelem);
+  palloc_free_page (child);
+
+  return exit_status;
 }
 
 /* Free the current process's resources. */
