@@ -11,6 +11,12 @@
 #include "threads/thread.h"
 #include "userprog/process.h"
 
+struct file 
+  {
+    struct inode *inode;        /* File's inode. */
+    off_t pos;                  /* Current position. */
+    bool deny_write;            /* Has file_deny_write() been called? */
+  };
 static void syscall_handler (struct intr_frame *);
 
 void
@@ -38,8 +44,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_EXEC:
       check_addr(*(uint32_t *)(f -> esp + 4));
       pid_t pid = exec(*(uint32_t *)(f -> esp + 4));
-      if(pid== -1)
-        exit(-1);
+
       f->eax = pid;
       break;
 
@@ -73,6 +78,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_READ:
       check_addr(f -> esp + 28);
       f -> eax = read(*(uint32_t *) (f -> esp + 20), *(uint32_t *)(f -> esp + 24), *(uint32_t *)(f -> esp + 28));
+
       break;
 
     case SYS_WRITE:
@@ -114,8 +120,17 @@ void exit(int status){
   struct file **fd_list = thread_current()->fd_list;
   int i;
   for(i=3; i<128; i++){
+    
     if(fd_list[i] != NULL) close(i);
   }
+
+  struct list_elem* e = list_head(&thread_current()->child_list);
+  while(e != list_end(&thread_current()->child_list)){
+    struct thread* child = list_entry(e, struct thread, childelem);
+    wait(child->tid);
+    e = e->next;
+  }
+
   
   thread_exit();
 }
@@ -157,7 +172,7 @@ int open(const char* file){
   if(file_opened == NULL) {
     return -1;
   }
-  
+  if(strcmp(thread_name(), file)==0) file_deny_write(file_opened);
   return add_fd(file_opened);
 }
 
@@ -191,7 +206,11 @@ int write(int fd, const void *buffer, unsigned size){
     putbuf(buffer, size);
     write_value = size;
   }else if(fd > 2){
-    write_value = file_write(thread_current() -> fd_list[fd], buffer, size);
+    struct file* target = thread_current()->fd_list[fd];
+    if(target == NULL) write_value = -1;
+
+
+    write_value = file_write(target, buffer, size);
   }else
     write_value = -1;
   lock_release(&filesys_lock);

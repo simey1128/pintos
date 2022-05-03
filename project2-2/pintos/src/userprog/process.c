@@ -4,7 +4,6 @@
 #include <round.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -18,6 +17,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
+#include "lib/string.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -28,10 +28,10 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
 process_execute (const char *cmd) 
-{
+{  
+ 
   char *fn_copy;
   tid_t tid;
-
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -40,6 +40,7 @@ process_execute (const char *cmd)
     return TID_ERROR;
   strlcpy (fn_copy, cmd, PGSIZE);
 
+
   char *file_name, *save_ptr;
   file_name = strtok_r(cmd, " ", &save_ptr);
 
@@ -47,6 +48,14 @@ process_execute (const char *cmd)
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  
+  
+ 
+
+  struct file* file = filesys_open(file_name);
+  if(file == NULL){
+    return TID_ERROR;
+  }
   return tid;
 }
 
@@ -145,7 +154,7 @@ void arg_stack(char **argv, int argc, void **esp){
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid ) 
+process_wait (tid_t child_tid) 
 {
   struct thread* child = get_child(child_tid);
   if(child == NULL) return -1;
