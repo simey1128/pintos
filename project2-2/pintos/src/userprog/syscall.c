@@ -37,13 +37,15 @@ syscall_handler (struct intr_frame *f UNUSED)
 
     case SYS_EXEC:
       check_addr(*(uint32_t *)(f -> esp + 4));
-      if(exec(*(uint32_t *)(f -> esp + 4)) == -1)
+      pid_t pid = exec(*(uint32_t *)(f -> esp + 4));
+      if(pid== -1)
         exit(-1);
+      f->eax = pid;
       break;
 
     case SYS_WAIT:
       check_addr(*(uint32_t *)(f -> esp + 4));
-      f -> eax = wait(f -> esp + 4);
+      f -> eax = wait(*(uint32_t *)(f -> esp + 4));
       break;
 
     case SYS_CREATE:
@@ -106,6 +108,7 @@ void halt(){
 }
 
 void exit(int status){
+  thread_current()->exit_status = status;
   printf("%s: exit(%d)\n", thread_name(), status);
 
   struct file **fd_list = thread_current()->fd_list;
@@ -120,18 +123,14 @@ void exit(int status){
 pid_t exec(const char *cmd_line){
   check_addr(cmd_line);
 
-  tid_t tid;
-  int size = strlen(cmd_line) + 1;
-  char *fn_copy = palloc_get_page(0);
-  if(fn_copy == NULL)
-    exit(-1);
-  strlcpy(fn_copy, cmd_line, size);
+  tid_t child_tid = process_execute(cmd_line);
+  struct thread* child = get_child(child_tid);
 
-  if(process_execute(fn_copy) == -1)
-    return -1;
+  sema_down(&child->sema_load);
 
-  NOT_REACHED();
-  return 0;
+  if(child->is_loaded == -1) return -1;
+  
+  return child_tid;
 }
 
 int wait(pid_t pid){

@@ -35,6 +35,7 @@ static struct list ready_list;
 static struct list all_list;
 
 
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -219,6 +220,16 @@ thread_create (const char *name, int priority,
   }
   t->fd_max = 2;
 
+  // information initialization
+  t->parent = thread_current();
+  t->is_loaded = 0;
+  t->is_exited = 0;
+  sema_init(&t->sema_exit, 0);
+  sema_init(&t->sema_load, 0);
+
+  // add child to child list of parent
+  list_push_back(&t->parent->child_list, &t->childelem);
+
   intr_set_level (old_level);
 
   
@@ -316,6 +327,8 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
+  thread_current()->is_exited = 1;
+  sema_up(&thread_current()->sema_exit);
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -487,6 +500,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
+
+  list_init(&t->child_list); 
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -558,7 +573,7 @@ thread_schedule_tail (struct thread *prev)
   if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
     {
       ASSERT (prev != cur);
-      palloc_free_page (prev);
+      // palloc_free_page (prev);
     }
 }
 

@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -76,12 +77,18 @@ start_process (void *cmd_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (argv[0], &if_.eip, &if_.esp);
 
+  sema_up(&thread_current()->sema_load);
+
   arg_stack(argv, argc, &if_.esp);
   // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
   /* If load failed, quit. */
   palloc_free_page (cmd);
-  if (!success) 
+  if (!success){
+    thread_current()->is_loaded = -1;
     thread_exit ();
+  }
+
+  thread_current()->is_loaded = 1;
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -138,11 +145,19 @@ void arg_stack(char **argv, int argc, void **esp){
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid ) 
 {
-  int i;
-  for (i = 0; i < 10000000; i++);
-  return -1;
+  struct thread* child = get_child(child_tid);
+  if(child == NULL) return -1;
+
+  sema_down(&child->sema_exit);
+
+  int exit_status = child->exit_status;
+
+  list_remove(&child->childelem);
+  palloc_free_page (child);
+
+  return exit_status;
 }
 
 /* Free the current process's resources. */
@@ -185,6 +200,23 @@ process_activate (void)
      interrupts. */
   tss_update ();
 }
+
+struct thread* get_child(int tid){ //only called by parent thread
+  struct thread* parent = thread_current();
+  struct list_elem* e;
+  for (e = list_begin (&parent->child_list); e != list_end (&parent->child_list);
+       e = list_next (e))
+  {
+    struct thread *child = list_entry (e, struct thread, childelem);
+    if(child->tid == tid){
+      return child;
+    }
+  }  
+
+  return NULL;
+}
+
+
 
 /* We load ELF binaries.  The following definitions are taken
    from the ELF specification, [ELF1], more-or-less verbatim.  */
