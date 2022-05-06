@@ -501,7 +501,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 
+  #ifdef USERPROG
   list_init(&t->child_list); 
+  #endif
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

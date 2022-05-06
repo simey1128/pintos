@@ -10,6 +10,8 @@
 #include <string.h>
 #include "threads/thread.h"
 #include "userprog/process.h"
+#include "lib/string.h"
+#include "threads/palloc.h"
 
 struct file 
   {
@@ -43,9 +45,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 
     case SYS_EXEC:
       check_addr(*(uint32_t *)(f -> esp + 4));
-      pid_t pid = exec(*(uint32_t *)(f -> esp + 4));
+      f->eax = exec(*(uint32_t *)(f -> esp + 4));
 
-      f->eax = pid;
       break;
 
     case SYS_WAIT:
@@ -137,8 +138,9 @@ void exit(int status){
 
 pid_t exec(const char *cmd_line){
   check_addr(cmd_line);
-
   tid_t child_tid = process_execute(cmd_line);
+  if(child_tid == TID_ERROR) return -1;
+
   struct thread* child = get_child(child_tid);
 
   sema_down(&child->sema_load);
@@ -148,6 +150,22 @@ pid_t exec(const char *cmd_line){
   return child_tid;
 }
 
+int check_file(char* cmd){
+char* temp = palloc_get_page (0);
+  if (temp == NULL)
+    return TID_ERROR;
+  strlcpy (temp, cmd, PGSIZE);
+
+  char *save_ptr;
+  struct file* file = filesys_open(strtok_r(temp, " ", &save_ptr));
+   palloc_free_page(temp);
+
+  if(file == NULL){
+    return 0;
+  }
+
+  return 1;
+}
 int wait(pid_t pid){
   return process_wait(pid);
 }
