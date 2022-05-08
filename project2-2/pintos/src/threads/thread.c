@@ -309,6 +309,7 @@ thread_exit (void)
 
 #ifdef USERPROG
   process_exit ();
+
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -487,6 +488,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
+
+  sema_init(&(t->sema_exit),0);
+  sema_init(&(t->sema_load),0);
+  list_init(&(t->child_list));
+  list_push_back(&(running_thread()->child_list), &(t->childelem));
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

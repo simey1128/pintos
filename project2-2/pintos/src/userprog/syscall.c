@@ -11,6 +11,12 @@
 #include "threads/thread.h"
 #include "userprog/process.h"
 
+struct file 
+  {
+    struct inode *inode;        /* File's inode. */
+    off_t pos;                  /* Current position. */
+    bool deny_write;            /* Has file_deny_write() been called? */
+  };
 static void syscall_handler (struct intr_frame *);
 
 void
@@ -37,13 +43,12 @@ syscall_handler (struct intr_frame *f UNUSED)
 
     case SYS_EXEC:
       check_addr(*(uint32_t *)(f -> esp + 4));
-      if(exec(*(uint32_t *)(f -> esp + 4)) == -1)
-        exit(-1);
+      f->eax = exec(*(uint32_t *)(f -> esp + 4));
       break;
 
     case SYS_WAIT:
       check_addr(*(uint32_t *)(f -> esp + 4));
-      f -> eax = wait(f -> esp + 4);
+      f -> eax = wait(*(uint32_t *)(f -> esp + 4));
       break;
 
     case SYS_CREATE:
@@ -106,6 +111,8 @@ void halt(){
 }
 
 void exit(int status){
+
+  thread_current()->exit_status = status;
   printf("%s: exit(%d)\n", thread_name(), status);
 
   struct file **fd_list = thread_current()->fd_list;
@@ -120,18 +127,7 @@ void exit(int status){
 pid_t exec(const char *cmd_line){
   check_addr(cmd_line);
 
-  tid_t tid;
-  int size = strlen(cmd_line) + 1;
-  char *fn_copy = palloc_get_page(0);
-  if(fn_copy == NULL)
-    exit(-1);
-  strlcpy(fn_copy, cmd_line, size);
-
-  if(process_execute(fn_copy) == -1)
-    return -1;
-
-  NOT_REACHED();
-  return 0;
+  return process_execute(cmd_line);
 }
 
 int wait(pid_t pid){
@@ -157,6 +153,10 @@ int open(const char* file){
  
   if(file_opened == NULL) {
     return -1;
+  }
+
+  if(strcmp(thread_name(), file_opened)==0){
+    file_deny_write(file_opened);
   }
   
   return add_fd(file_opened);
@@ -192,7 +192,13 @@ int write(int fd, const void *buffer, unsigned size){
     putbuf(buffer, size);
     write_value = size;
   }else if(fd > 2){
-    write_value = file_write(thread_current() -> fd_list[fd], buffer, size);
+    struct file* target = thread_current()->fd_list[fd];
+    if(target==NULL) write_value = -1;
+
+    if(target->deny_write) file_deny_write(target);
+
+    write_value = file_write(target, buffer, size);
+   
   }else
     write_value = -1;
   lock_release(&filesys_lock);

@@ -4,7 +4,7 @@
 #include <round.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+// #include <string.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "lib/string.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -42,11 +43,28 @@ process_execute (const char *cmd)
   char *file_name, *save_ptr;
   file_name = strtok_r(cmd, " ", &save_ptr);
 
+  struct file* file = filesys_open(file_name);
+  if(file==NULL){
+    return -1;
+  }
+  file_close(file);
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  
+  struct list_elem* e;
+  struct thread* t;
+  for (e = list_begin(&thread_current()->child_list); e != list_end(&thread_current()->child_list); e = list_next(e)) {
+    t = list_entry(e, struct thread, childelem);
+      if (t->exit_status == -1) {
+        return process_wait(tid);
+      }
+  }
+
   return tid;
+
 }
 
 /* A thread function that loads a user process and starts it
@@ -75,6 +93,7 @@ start_process (void *cmd_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (argv[0], &if_.eip, &if_.esp);
+
 
   arg_stack(argv, argc, &if_.esp);
   // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
@@ -138,10 +157,34 @@ void arg_stack(char **argv, int argc, void **esp){
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  int i;
-  for (i = 0; i < 10000000; i++);
+  int exit_status;
+  struct thread* child = NULL;
+
+  struct list_elem* e;
+  // while(e!=list_end(&thread_current()->child_list)){
+  //   child = list_entry(e, struct thread, childelem);
+  //   if(child_tid == child->tid){
+  //     sema_down(&child->sema_exit);
+  //     exit_status = child->exit_status;
+  //     list_remove(&child->childelem);
+  //     sema_up(&child->sema_load);
+  //     return exit_status;
+  //   }
+  //   e = e->next;
+  // }
+   for (e = list_begin(&(thread_current()->child_list)); e != list_end(&(thread_current()->child_list)); e = list_next(e)) {
+    child = list_entry(e, struct thread, childelem);
+    if (child_tid == child->tid) {
+      sema_down(&(child->sema_exit));
+      exit_status = child->exit_status;
+      list_remove(&(child->childelem));
+      sema_up(&child->sema_load);
+      return exit_status;
+    }
+  }
+
   return -1;
 }
 
@@ -168,6 +211,9 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  
+  sema_up(&cur->sema_exit);
+  sema_down(&cur->sema_load);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -277,11 +323,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Open executable file. */
   file = filesys_open (file_name);
+  
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+    file_deny_write(file);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -362,11 +410,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
+  
+
   success = true;
 
  done:
   /* We arrive here whether the load is successful or not. */
+  
   file_close (file);
+  
   return success;
 }
 
