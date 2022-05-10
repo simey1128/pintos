@@ -39,8 +39,10 @@ process_execute (const char *cmd)
     return TID_ERROR;
   strlcpy (fn_copy, cmd, PGSIZE);
 
-  char *file_name, *save_ptr;
-  file_name = strtok_r(cmd, " ", &save_ptr);
+  // char *file_name, *save_ptr;
+  char file_name[256];
+  get_filename(cmd, file_name);
+  // file_name = strtok_r(cmd, " ", save_ptr);
 
   struct file* file = filesys_open(file_name);
   if(file == NULL){
@@ -86,15 +88,14 @@ start_process (void *cmd_)
   sema_up(&thread_current()->sema_load);
 
   arg_stack(argv, argc, &if_.esp);
+  // printf("cmd: %s\n", cmd_);
+  // printf("tid: %d\n", thread_current()->tid);
   // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
   /* If load failed, quit. */
   palloc_free_page (cmd);
   if (!success){
-    thread_current()->is_loaded = -1;
     thread_exit ();
   }
-
-  thread_current()->is_loaded = 1;
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -104,6 +105,13 @@ start_process (void *cmd_)
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
+}
+
+void get_filename(char *cmd, char *file_name){
+  int i;
+  strlcpy(file_name, cmd, strlen(cmd) + 1);
+  for(i = 0; file_name[i] != '\0' && file_name[i] != ' '; i++);
+  file_name[i] = '\0';
 }
 
 void arg_stack(char **argv, int argc, void **esp){
@@ -159,8 +167,8 @@ process_wait (tid_t child_tid)
   sema_down(&child->sema_exit);
 
   int exit_status = child->exit_status;
-
   list_remove(&child->childelem);
+  sema_up(&child->sema_load);
   palloc_free_page (child);
 
   return exit_status;

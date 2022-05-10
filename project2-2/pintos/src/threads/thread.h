@@ -113,8 +113,6 @@ struct thread
    struct list_elem childelem;
    struct list child_list;
 
-   int is_loaded; // -1 == fail, 0 == not loaded, 1 == loaded
-   int is_exited; // 0 == not exited, 1 == exited
    int exit_status;
    
    struct semaphore sema_exit;

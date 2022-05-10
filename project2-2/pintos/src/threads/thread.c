@@ -222,8 +222,6 @@ thread_create (const char *name, int priority,
 
   // information initialization
   t->parent = thread_current();
-  t->is_loaded = 0;
-  t->is_exited = 0;
   sema_init(&t->sema_exit, 0);
   sema_init(&t->sema_load, 0);
 
@@ -327,7 +325,6 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
-  thread_current()->is_exited = 1;
   sema_up(&thread_current()->sema_exit);
   thread_current ()->status = THREAD_DYING;
   schedule ();

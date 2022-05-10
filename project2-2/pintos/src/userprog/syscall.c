@@ -32,6 +32,8 @@ static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   // printf("syscall: %d\n", *(uint8_t *)(f -> esp));
+  // printf("tid: %d\n", thread_current()->tid);
+  // hex_dump(f -> esp, f -> esp, PHYS_BASE - (f -> esp), true);
   check_addr((f->esp));
   switch(*(uint8_t *)(f -> esp)){
     case SYS_HALT:
@@ -46,7 +48,6 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_EXEC:
       check_addr(*(uint32_t *)(f -> esp + 4));
       f->eax = exec(*(uint32_t *)(f -> esp + 4));
-
       break;
 
     case SYS_WAIT:
@@ -121,23 +122,13 @@ void exit(int status){
   struct file **fd_list = thread_current()->fd_list;
   int i;
   for(i=3; i<128; i++){
-    
     if(fd_list[i] != NULL) close(i);
   }
 
-  struct list_elem* e = list_head(&thread_current()->child_list);
-  while(e != list_end(&thread_current()->child_list)){
-    struct thread* child = list_entry(e, struct thread, childelem);
-    wait(child->tid);
-    e = e->next;
-  }
-
-  
   thread_exit();
 }
 
 pid_t exec(const char *cmd_line){
-  check_addr(cmd_line);
   tid_t child_tid = process_execute(cmd_line);
   if(child_tid == TID_ERROR) return -1;
 
@@ -145,20 +136,18 @@ pid_t exec(const char *cmd_line){
 
   sema_down(&child->sema_load);
 
-  if(child->is_loaded == -1) return -1;
-  
   return child_tid;
 }
 
 int check_file(char* cmd){
-char* temp = palloc_get_page (0);
+  char* temp = palloc_get_page (0);
   if (temp == NULL)
     return TID_ERROR;
   strlcpy (temp, cmd, PGSIZE);
 
   char *save_ptr;
   struct file* file = filesys_open(strtok_r(temp, " ", &save_ptr));
-   palloc_free_page(temp);
+  palloc_free_page(temp);
 
   if(file == NULL){
     return 0;
@@ -166,6 +155,7 @@ char* temp = palloc_get_page (0);
 
   return 1;
 }
+
 int wait(pid_t pid){
   return process_wait(pid);
 }
