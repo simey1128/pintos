@@ -217,11 +217,8 @@ thread_create (const char *name, int priority,
   for(i=0; i<128; i++){
     fd_list[i] = NULL;
   }
-  t->fd_max = 2;
 
   intr_set_level (old_level);
-
-  
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -491,7 +488,9 @@ init_thread (struct thread *t, const char *name, int priority)
 
   sema_init(&(t->sema_exit),0);
   sema_init(&(t->sema_load),0);
+#ifdef USERPROG
   list_init(&(t->child_list));
+#endif
   list_push_back(&(running_thread()->child_list), &(t->childelem));
 }
 
@@ -608,15 +607,22 @@ allocate_tid (void)
 int add_fd(struct file * file){
   struct thread* cur_thread= thread_current();
   struct file** fd_list = cur_thread->fd_list;
-  int fd_max = ++(cur_thread->fd_max) ;
+  // int fd_max = ++(cur_thread->fd_max) ;
 
-  int i;
-  for(i=3; i<fd_max; i++){
-    if(fd_list[i] != NULL && (fd_list[i])->inode == file->inode) fd_list[i] = NULL;
+  int i,fd;
+  for(i=3; i<128; i++){
+    if(fd_list[i]==NULL) {
+      fd=i;
+      break;
+    }
+    if(fd_list[i] != NULL && (fd_list[i])->inode == file->inode) {
+      fd_list[i] = NULL;
+      fd = i+1 ==128 ? 128 : i+1;
+    }
   }
 
-  fd_list[fd_max] = file;
-  return cur_thread->fd_max;
+  fd_list[fd] = file;
+  return fd;
 }
 
 /* Offset of `stack' member within `struct thread'.

@@ -105,7 +105,6 @@ struct thread
     /* Owned by thread.c. */
    uint32_t *pagedir; 
    struct file* fd_list[128];
-   int fd_max;  
    unsigned magic;                     /* Detects stack overflow. */
 
    struct semaphore sema_exit;
@@ -114,6 +113,7 @@ struct thread
    struct list_elem childelem;
    int exit_status;
 
+   struct file *current_file;
   };
 
 /* If false (default), use round-robin scheduler.

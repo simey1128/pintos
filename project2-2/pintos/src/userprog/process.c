@@ -4,7 +4,6 @@
 #include <round.h>
 #include <stdio.h>
 #include <stdlib.h>
-// #include <string.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -40,31 +39,21 @@ process_execute (const char *cmd)
     return TID_ERROR;
   strlcpy (fn_copy, cmd, PGSIZE);
 
-  char *file_name, *save_ptr;
-  file_name = strtok_r(cmd, " ", &save_ptr);
+  char file_name[256];
+  get_filename(cmd, file_name);
 
   struct file* file = filesys_open(file_name);
-  if(file==NULL){
-    return -1;
+  if(file == NULL){
+    palloc_free_page(fn_copy);
+    return TID_ERROR;
   }
-  file_close(file);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
-  
-  struct list_elem* e;
-  struct thread* t;
-  for (e = list_begin(&thread_current()->child_list); e != list_end(&thread_current()->child_list); e = list_next(e)) {
-    t = list_entry(e, struct thread, childelem);
-      if (t->exit_status == -1) {
-        return process_wait(tid);
-      }
-  }
 
   return tid;
-
 }
 
 /* A thread function that loads a user process and starts it
@@ -110,6 +99,13 @@ start_process (void *cmd_)
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
+}
+
+void get_filename(char *cmd, char *file_name){
+  int i;
+  strlcpy(file_name, cmd, strlen(cmd) + 1);
+  for(i = 0; file_name[i] != '\0' && file_name[i] != ' '; i++);
+  file_name[i] = '\0';
 }
 
 void arg_stack(char **argv, int argc, void **esp){
@@ -163,17 +159,6 @@ process_wait (tid_t child_tid)
   struct thread* child = NULL;
 
   struct list_elem* e;
-  // while(e!=list_end(&thread_current()->child_list)){
-  //   child = list_entry(e, struct thread, childelem);
-  //   if(child_tid == child->tid){
-  //     sema_down(&child->sema_exit);
-  //     exit_status = child->exit_status;
-  //     list_remove(&child->childelem);
-  //     sema_up(&child->sema_load);
-  //     return exit_status;
-  //   }
-  //   e = e->next;
-  // }
    for (e = list_begin(&(thread_current()->child_list)); e != list_end(&(thread_current()->child_list)); e = list_next(e)) {
     child = list_entry(e, struct thread, childelem);
     if (child_tid == child->tid) {
@@ -194,6 +179,7 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  file_close(cur->current_file);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -329,7 +315,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
-    file_deny_write(file);
+
+  t->current_file = file;
+  file_deny_write(file);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -416,9 +404,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  
-  file_close (file);
-  
   return success;
 }
 
