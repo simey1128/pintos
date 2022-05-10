@@ -133,7 +133,6 @@ pid_t exec(const char *cmd_line){
   if(child_tid == TID_ERROR) return -1;
 
   struct thread* child = get_child(child_tid);
-
   sema_down(&child->sema_load);
 
   return child_tid;
@@ -175,13 +174,17 @@ int remove(const char *file){
 }
 
 int open(const char* file){
+  lock_acquire(&filesys_lock);
   struct file* file_opened = filesys_open(file);
  
   if(file_opened == NULL) {
+    lock_release(&filesys_lock);
     return -1;
   }
-  if(strcmp(thread_name(), file)==0) file_deny_write(file_opened);
-  return add_fd(file_opened);
+
+  int fd = add_fd(file_opened);
+  lock_release(&filesys_lock);
+  return fd;
 }
 
 int filesize(int fd){

@@ -114,6 +114,7 @@ struct thread
    struct list child_list;
 
    int exit_status;
+   struct file* current_file;
    
    struct semaphore sema_exit;
    struct semaphore sema_load;

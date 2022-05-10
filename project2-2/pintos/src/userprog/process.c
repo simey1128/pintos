@@ -97,6 +97,7 @@ start_process (void *cmd_)
     thread_exit ();
   }
 
+  
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -168,7 +169,6 @@ process_wait (tid_t child_tid)
 
   int exit_status = child->exit_status;
   list_remove(&child->childelem);
-  sema_up(&child->sema_load);
   palloc_free_page (child);
 
   return exit_status;
@@ -180,6 +180,7 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  file_close(cur->current_file);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -328,7 +329,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
-
+  t->current_file = file;
+  file_deny_write(file);
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -412,7 +414,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
   return success;
 }
 
