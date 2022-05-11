@@ -133,7 +133,7 @@ pid_t exec(const char *cmd_line){
   if(child_tid == TID_ERROR) return -1;
 
   struct thread* child = get_child(child_tid);
-  sema_down(&child->sema_load);
+  // sema_down(&child->sema_load);
 
   return child_tid;
 }

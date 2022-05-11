@@ -165,6 +165,7 @@ process_wait (tid_t child_tid)
   struct thread* child = get_child(child_tid);
   if(child == NULL) return -1;
 
+  sema_down(&child->sema_load);
   sema_down(&child->sema_exit);
 
   int exit_status = child->exit_status;
