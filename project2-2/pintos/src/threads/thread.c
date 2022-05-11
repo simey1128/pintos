@@ -486,12 +486,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 
-  sema_init(&(t->sema_exit),0);
-  sema_init(&(t->sema_load),0);
 #ifdef USERPROG
+  t->parent = running_thread();
+  sema_init(&(t->sema_exit),0);
+  sema_init(&(t->sema_mem), 0);
+  sema_init(&(t->sema_load),0);
   list_init(&(t->child_list));
-#endif
   list_push_back(&(running_thread()->child_list), &(t->childelem));
+#endif
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -607,7 +609,6 @@ allocate_tid (void)
 int add_fd(struct file * file){
   struct thread* cur_thread= thread_current();
   struct file** fd_list = cur_thread->fd_list;
-  // int fd_max = ++(cur_thread->fd_max) ;
 
   int i,fd;
   for(i=3; i<128; i++){

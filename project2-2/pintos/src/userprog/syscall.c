@@ -147,6 +147,7 @@ int remove(const char *file){
 }
 
 int open(const char* file){
+  check_addr(file);
   lock_acquire(&filesys_lock);
   struct file* file_opened = filesys_open(file);
  

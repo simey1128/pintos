@@ -50,8 +50,18 @@ process_execute (const char *cmd)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  sema_down(&thread_current()->sema_load);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    palloc_free_page (fn_copy);
+
+  // struct list_elem *e = list_begin(&thread_current()->child_list);
+  // while(e != list_end(&thread_current()->child_list)){
+  //   struct thread *t = list_entry(e, struct thread, childelem);
+  //   if(t->flag == -1){
+  //     return process_wait(tid);
+  //   }
+  //   e = list_next(e);
+  // }
 
   return tid;
 }
@@ -84,12 +94,17 @@ start_process (void *cmd_)
   success = load (argv[0], &if_.eip, &if_.esp);
 
 
-  arg_stack(argv, argc, &if_.esp);
+  if(success){
+    arg_stack(argv, argc, &if_.esp);
+  }
   // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
   /* If load failed, quit. */
   palloc_free_page (cmd);
-  if (!success) 
+  sema_up(&thread_current()->parent->sema_load);
+  if (!success) {
+    thread_current() -> flag = -1;
     thread_exit ();
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -165,7 +180,7 @@ process_wait (tid_t child_tid)
       sema_down(&(child->sema_exit));
       exit_status = child->exit_status;
       list_remove(&(child->childelem));
-      sema_up(&child->sema_load);
+      sema_up(&child->sema_mem);
       return exit_status;
     }
   }
@@ -197,9 +212,8 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-  
   sema_up(&cur->sema_exit);
-  sema_down(&cur->sema_load);
+  sema_down(&cur->sema_mem);
 }
 
 /* Sets up the CPU for running user code in the current

@@ -95,23 +95,22 @@ struct thread
     struct list_elem elem;              /* List element. */
     
 
-   // #ifdef USERPROG
-   //  /* Owned by userprog/process.c. */
-   // uint32_t *pagedir; 
-   // struct file* fd_list[128];
-   // int fd_max;                 /* Page directory. */
-   // #endif
-
-    /* Owned by thread.c. */
-   uint32_t *pagedir; 
-   struct file* fd_list[128];
-   unsigned magic;                     /* Detects stack overflow. */
-
+    /* Owned by userprog/process.c. */
+#ifdef USERPROG
+   uint32_t *pagedir;                  /* Page directory. */
    struct semaphore sema_exit;
+   struct semaphore sema_mem;
    struct semaphore sema_load;
+   struct thread *parent;
    struct list child_list;
    struct list_elem childelem;
    int exit_status;
+   struct file* fd_list[128];
+   int flag;
+#endif
+
+    /* Owned by thread.c. */
+   unsigned magic;                     /* Detects stack overflow. */
 
    struct file *current_file;
   };
