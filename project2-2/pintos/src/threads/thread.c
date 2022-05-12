@@ -218,7 +218,6 @@ thread_create (const char *name, int priority,
   for(i=0; i<128; i++){
     fd_list[i] = NULL;
   }
-  t->fd_max = 2;
 
   // information initialization
   t->parent = thread_current();
@@ -229,8 +228,6 @@ thread_create (const char *name, int priority,
   list_push_back(&t->parent->child_list, &t->childelem);
 
   intr_set_level (old_level);
-
-  
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -318,6 +315,7 @@ thread_exit (void)
 
 #ifdef USERPROG
   process_exit ();
+
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -498,9 +496,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 
-  #ifdef USERPROG
-  list_init(&t->child_list); 
-  #endif
+#ifdef USERPROG
+  t->parent = running_thread();
+  sema_init(&(t->sema_exit),0);
+  sema_init(&(t->sema_mem), 0);
+  sema_init(&(t->sema_load),0);
+  list_init(&(t->child_list));
+  list_push_back(&(running_thread()->child_list), &(t->childelem));
+#endif
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -613,26 +616,6 @@ allocate_tid (void)
   return tid;
 }
 
-int add_fd(struct file * file){
-  struct thread* cur_thread= thread_current();
-  struct file** fd_list = cur_thread->fd_list;
-  // int fd_max = ++(cur_thread->fd_max) ;
-
-  int i,fd;
-  for(i=3; i<128; i++){
-    if(fd_list[i]==NULL) {
-      fd=i;
-      break;
-    }
-    if(fd_list[i] != NULL && (fd_list[i])->inode == file->inode) {
-      fd_list[i] = NULL;
-      fd = i+1 ==128 ? 128 : i+1;
-    }
-  }
-
-  fd_list[fd] = file;
-  return fd;
-}
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */

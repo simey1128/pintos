@@ -16,7 +16,6 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "threads/synch.h"
 #include "lib/string.h"
 
 static thread_func start_process NO_RETURN;
@@ -26,6 +25,21 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
+struct thread* get_child(int tid){ //only called by parent thread
+  struct thread* parent = thread_current();
+  struct list_elem* e;
+  for (e = list_begin (&parent->child_list); e != list_end (&parent->child_list);
+       e = list_next (e))
+  {
+    struct thread *child = list_entry (e, struct thread, childelem);
+    if(child->tid == tid){
+      return child;
+    }
+  }  
+
+  return NULL;
+}
+
 tid_t
 process_execute (const char *cmd) 
 {  
@@ -39,10 +53,8 @@ process_execute (const char *cmd)
     return TID_ERROR;
   strlcpy (fn_copy, cmd, PGSIZE);
 
-  // char *file_name, *save_ptr;
   char file_name[256];
   get_filename(cmd, file_name);
-  // file_name = strtok_r(cmd, " ", save_ptr);
 
   struct file* file = filesys_open(file_name);
   if(file == NULL){
@@ -52,9 +64,13 @@ process_execute (const char *cmd)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  sema_down(&thread_current()->sema_load);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
-  
+    palloc_free_page (fn_copy);
+
+  struct thread* child = get_child(tid);
+  if(child->not_loaded == 1) return process_wait(child->tid);
+
   return tid;
 }
 
@@ -85,16 +101,17 @@ start_process (void *cmd_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (argv[0], &if_.eip, &if_.esp);
 
-  sema_up(&thread_current()->sema_load);
 
-  arg_stack(argv, argc, &if_.esp);
-  // printf("cmd: %s\n", cmd_);
-  // printf("tid: %d\n", thread_current()->tid);
+  if(success){
+    arg_stack(argv, argc, &if_.esp);
+  }
   // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
   /* If load failed, quit. */
   palloc_free_page (cmd);
-  if (!success){
-    thread_exit ();
+  sema_up(&thread_current()->parent->sema_load);
+  if (!success) {
+    thread_current() -> not_loaded = 1;
+    exit(-1);
   }
 
   
@@ -162,15 +179,15 @@ void arg_stack(char **argv, int argc, void **esp){
 int
 process_wait (tid_t child_tid) 
 {
+  int exit_status;
   struct thread* child = get_child(child_tid);
+
   if(child == NULL) return -1;
 
-  sema_down(&child->sema_load);
-  sema_down(&child->sema_exit);
-
-  int exit_status = child->exit_status;
-  list_remove(&child->childelem);
-  palloc_free_page (child);
+  sema_down(&(child->sema_exit));
+  exit_status = child->exit_status;
+  list_remove(&(child->childelem));
+  sema_up(&child->sema_mem);
 
   return exit_status;
 }
@@ -199,6 +216,8 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  sema_up(&cur->sema_exit);
+  sema_down(&cur->sema_mem);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -325,13 +344,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Open executable file. */
   file = filesys_open (file_name);
+  
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+
   t->current_file = file;
   file_deny_write(file);
+
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -410,6 +432,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
+
+  
 
   success = true;
 

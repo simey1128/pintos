@@ -95,36 +95,30 @@ struct thread
     struct list_elem elem;              /* List element. */
     
 
-   // #ifdef USERPROG
-   //  /* Owned by userprog/process.c. */
-   // uint32_t *pagedir; 
-   // struct file* fd_list[128];
-   // int fd_max;                 /* Page directory. */
-   // #endif
+    /* Owned by userprog/process.c. */
+#ifdef USERPROG
+   uint32_t *pagedir;                  /* Page directory. */
+   struct semaphore sema_exit;
+   struct semaphore sema_mem;
+   struct semaphore sema_load;
+   struct thread *parent;
+   struct list child_list;
+   struct list_elem childelem;
+   int exit_status;
+   struct file* fd_list[128];
+   int not_loaded;
+#endif
 
     /* Owned by thread.c. */
-   uint32_t *pagedir; 
-   struct file* fd_list[128];
-   int fd_max;  
    unsigned magic;                     /* Detects stack overflow. */
 
-   /*Project2-2*/
-   struct thread* parent;
-   struct list_elem childelem;
-   struct list child_list;
-
-   int exit_status;
-   struct file* current_file;
-   
-   struct semaphore sema_exit;
-   struct semaphore sema_load;
+   struct file *current_file;
   };
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
-int add_fd(struct file *);
 void thread_init (void);
 void thread_start (void);
 
