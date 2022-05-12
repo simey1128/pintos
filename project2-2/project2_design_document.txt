@@ -114,6 +114,13 @@ For other fds, we just return -1. Before return, we always release lock to preve
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
+ When padgdir is created, pagedir_create() allocate page by palloc_get_page().
+So, data will be stored in contiguous manner.
+At this time, data can be stored across two pages. (Because the data size isn't larger than the page size, it covers only two pages at most.)
+Thus, either data is 2 bytes or 4096 bytes, greatest possible number of inspections of the page table is 2 and least is 1.
+ For 4096 bytes, if the address of the first byte of data chunk is same with the start of the page entry, it is guaranteed to use only one page.
+Similarly, for 2 bytes, it is guaranteed to use only one page if the address of the last byte is same with the last of the page entry.
+
 
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
