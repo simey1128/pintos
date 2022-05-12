@@ -130,8 +130,7 @@ void exit(int status){
 }
 
 pid_t exec(const char *cmd_line){
-  tid_t child_tid = process_execute(cmd_line);
-  if(child_tid == TID_ERROR) return -1;
+  check_addr(cmd_line);
 
   return process_execute(cmd_line);
 }

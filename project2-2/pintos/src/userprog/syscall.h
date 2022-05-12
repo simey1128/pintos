@@ -9,7 +9,6 @@ struct lock filesys_lock;
 void syscall_init (void);
 
 void check_addr(void *);
-int check_file(char* );
 void halt();
 void exit(int);
 pid_t exec(const char *);
