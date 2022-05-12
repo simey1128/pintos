@@ -90,6 +90,22 @@ We preserved that uniqueness within a single process.
 
 >> B3: Describe your code for reading and writing user data from the
 >> kernel.
+In Write, 
+
+before handling fd, lock for preventing race condition is first acquired.
+If acquiring is succeed, it can progress.
+When fd is 1, we print out data in ‘buffer’ to console using ‘putbuf()’.
+When fd is larger than 2, we write from buffer to file whose fd is correspond to the fd value from argument and return number of bytes written.
+For other fds, we just return -1.
+Before return, we always release lock to prevent dead lock.
+
+In Read,
+
+before handling fd, lock for preventing race condition is first acquired.
+If acquiring is succeed, it can progress.
+When fd is 0, we read key through input_getc().
+When fd is larger than 2 and smaller than 128, read data from file whose fd is correspond to the fd value from argument and return number of bytes read.
+For other fds, we just return -1. Before return, we always release lock to prevent dead lock.
 
 >> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least
@@ -98,8 +114,17 @@ We preserved that uniqueness within a single process.
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
+
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
+‘wait’ system call calls ‘process_wait()’.
+‘process_wait()’ should wait until child thread whose tid is corresponding to tid from argument.
+Therefore, before forked child thread to terminate, parent thread should be blocked.
+Through ‘sema_down()’ for ‘sema_exit’ semaphore, parent can wait child to terminate.
+During termination of child thread, It calls ‘sema_up()’ for sema_exit and parent thread can progress.
+After that, child thread blocks itself through ‘sema_down()’ for ‘sema_mem’ semaphore.
+It is made to prevent a situation where after child thread termination, its struct stored in ‘child_list’ of parent thread can’t be successfully removed because of interleaving of termination of parent(exit) before ‘list_remove(&child→childelem)’ instruction.
+To prevent that situation successfully, child thread gets blocked through ‘sema_down()’ for ‘sema_mem’ semaphore and it can get out of it after parent thread remove struct successfully, it calls ‘sema_up()’ for ‘sema_mem’. 
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
@@ -115,12 +140,47 @@ We preserved that uniqueness within a single process.
 >> paragraphs, describe the strategy or strategies you adopted for
 >> managing these issues.  Give an example.
 
+* First case is when syscall is called.
+Before every system call, we check validity of address for every argument pointers and for every pointers contained in argument through ‘check_addr()’ function.
+In check_addr(), we check if address is null or if address is in user virtual address space.
+If address is at least the one of cases, if calls exit(-1) to terminate thread.
+For example, we first check every arguments through ‘check_addr(f→esp+20)’, ‘check_addr(f→esp+24)’ and ‘check_addr(f→esp+28)’.
+If all the argument pointers are valid, we can call write().
+If not, we call exit(-1). In ‘write()’, ‘check_addr(buffer)’ and ‘check_addr(buffer+size+1)’ is called to check validity of buffer pointer to first element and last element, respectively. 
+* Other invalid access can be made during execution.
+In that case, we handle it through page_fault.
+‘fault_addr’ variable is the address which causes page fault.
+We check three condition.
+First, Check whether fault_addr is null.
+If fault_addr is null, we just call exit(-1) because its buggy situation.
+Second, Check whether access to fault_addr is caused by user.
+If access is caused by kernel, we just call exit(-1).
+Third, Check whether fault_addr is in kernel virtual address space.
+If it is, we just call exit(-1).
+For example, In test sc-bad-sp, user program tries to access address in kernel virtual address space(movl $.-(6410241024)).
+Through page_fault exception handling we made, we can handle it.
+
 ---- SYNCHRONIZATION ----
 
 >> B7: The "exec" system call returns -1 if loading the new executable
 >> fails, so it cannot return before the new executable has completed
 >> loading.  How does your code ensure this?  How is the load
 >> success/failure status passed back to the thread that calls "exec"?
+
+parent thread = P, child thread = C
+ First, after thread_create(), P immediately down the ‘sema_load’ and wait until C up the that semaphore. 
+ Second, then C get CPU and execute ‘start_process()’.
+In it, C calls ‘load()’ to load the new executable.
+After load(), C up the ‘sema_load’.
+Result of loading the new executable is stored in ‘success’ variable.
+If value of success is false, it means that loading the new executable fails.
+For that case,  we set the ‘not_labeled’ member of C to be 1 and call exit(-1).
+Through exit(-1) called by C, its exit_status becomes -1.
+ Third, P gets CPU again.
+Because of sema_load is up by C, P can progress execution.
+P check the load status of C through not_loaded value of C.
+If not_loaded of C is 1, P call ‘process_wait(tid of C)’ and return value from it.
+Because exit_status of C is -1 and ‘process_wait()’ returns that exit_status, “exec” system call returns -1.  
 
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P
@@ -129,16 +189,42 @@ We preserved that uniqueness within a single process.
 >> terminates without waiting, before C exits?  After C exits?  Are
 >> there any special cases?
 
+Either before or after C exits, P wait until semaphore to be 1, and semaphore be increased when C exits.
+So, if P calls wait(C) before C exits, P will wait until C exits.
+And if P calls wait(C) after C exits, P doesn’t have to wait.
+1. P calls wait(C) before C exits
+ If P calls wait(C) before C exits, P will wait until C exits.
+When C calls exit(), all of file descriptor that opened and allocated_page are freed, then semaphore is freed by C.
+So P can finish to wait and be added to ready_list to be scheduled.
+2. P calls wait(C) after C exits
+ If P calls wait(C) after C exits, P doesn’t have to wait C because already C is exited.
+So all resources and semaphore that had allocated to C are freed before.
+So P can be added to ready_list immadiately.
+3. P terminates without waiting, before C exits
+ If P terminates abnormally, C's exit doesn't affect any other processes.
+C just proceeds arbitrarily and frees its resources when exiting.
+4. P terminates without waiting, after C exits
+ Same with situation 2 (P calls wait(C) after C exits)
+
 ---- RATIONALE ----
 
 >> B9: Why did you choose to implement access to user memory from the
 >> kernel in the way that you did?
+When accessing user memory from the kernel, we chose to check whether the pointer exists in the user memory area every time.
+Because this method is more intuitive.
 
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
+Advantages:
+ We designed file descriptor list with array, so we can access to each file descriptor easily by index.
+Disadvantages:
+ When open same file twice, we have to use two file descriptors.
+If more open is needed, more file descriptors are needed
 
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
+ In our implementation of pintos, only one thread is created per one process.
+So, we don’t need to use other instead of identity mapping.
 
          SURVEY QUESTIONS
          ================
