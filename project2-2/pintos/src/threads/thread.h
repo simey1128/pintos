@@ -106,7 +106,7 @@ struct thread
    struct list_elem childelem;
    int exit_status;
    struct file* fd_list[128];
-   int flag;
+   int not_loaded;
 #endif
 
     /* Owned by thread.c. */
@@ -119,7 +119,6 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
-int add_fd(struct file *);
 void thread_init (void);
 void thread_start (void);
 

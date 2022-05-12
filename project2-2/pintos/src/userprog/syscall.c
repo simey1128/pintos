@@ -148,6 +148,7 @@ int remove(const char *file){
 
 int open(const char* file){
   check_addr(file);
+
   lock_acquire(&filesys_lock);
   struct file* file_opened = filesys_open(file);
  
@@ -155,11 +156,19 @@ int open(const char* file){
     lock_release(&filesys_lock);
     return -1;
   }
-
-  int fd = add_fd(file_opened);
+  
+  int i, fd;
+  for (i = 3; i < 128; i++) {
+      if (thread_current()->fd_list[i] == NULL) {
+        thread_current()->fd_list[i] = file_opened; 
+        fd = i;
+        break;
+      }   
+    }   
   lock_release(&filesys_lock);
   return fd;
 }
+
 
 int filesize(int fd){
   struct file *open_file = thread_current() -> fd_list[fd];

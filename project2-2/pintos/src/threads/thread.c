@@ -606,25 +606,6 @@ allocate_tid (void)
   return tid;
 }
 
-int add_fd(struct file * file){
-  struct thread* cur_thread= thread_current();
-  struct file** fd_list = cur_thread->fd_list;
-
-  int i,fd;
-  for(i=3; i<128; i++){
-    if(fd_list[i]==NULL) {
-      fd=i;
-      break;
-    }
-    if(fd_list[i] != NULL && (fd_list[i])->inode == file->inode) {
-      fd_list[i] = NULL;
-      fd = i+1 ==128 ? 128 : i+1;
-    }
-  }
-
-  fd_list[fd] = file;
-  return fd;
-}
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
