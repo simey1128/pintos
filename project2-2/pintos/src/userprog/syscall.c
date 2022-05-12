@@ -169,7 +169,6 @@ int open(const char* file){
   return fd;
 }
 
-
 int filesize(int fd){
   struct file *open_file = thread_current() -> fd_list[fd];
   if(open_file == NULL)
