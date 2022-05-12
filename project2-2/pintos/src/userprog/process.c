@@ -25,6 +25,21 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
+struct thread* get_child(int tid){ //only called by parent thread
+  struct thread* parent = thread_current();
+  struct list_elem* e;
+  for (e = list_begin (&parent->child_list); e != list_end (&parent->child_list);
+       e = list_next (e))
+  {
+    struct thread *child = list_entry (e, struct thread, childelem);
+    if(child->tid == tid){
+      return child;
+    }
+  }  
+
+  return NULL;
+}
+
 tid_t
 process_execute (const char *cmd) 
 {
@@ -54,14 +69,8 @@ process_execute (const char *cmd)
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
 
-  // struct list_elem *e = list_begin(&thread_current()->child_list);
-  // while(e != list_end(&thread_current()->child_list)){
-  //   struct thread *t = list_entry(e, struct thread, childelem);
-  //   if(t->flag == -1){
-  //     return process_wait(tid);
-  //   }
-  //   e = list_next(e);
-  // }
+  struct thread* child = get_child(tid);
+  if(child->not_loaded == 1) return process_wait(child->tid);
 
   return tid;
 }
@@ -102,8 +111,8 @@ start_process (void *cmd_)
   palloc_free_page (cmd);
   sema_up(&thread_current()->parent->sema_load);
   if (!success) {
-    thread_current() -> flag = -1;
-    thread_exit ();
+    thread_current() -> not_loaded = 1;
+    exit(-1);
   }
 
   /* Start the user process by simulating a return from an
@@ -171,21 +180,16 @@ int
 process_wait (tid_t child_tid) 
 {
   int exit_status;
-  struct thread* child = NULL;
+  struct thread* child = get_child(child_tid);
 
-  struct list_elem* e;
-   for (e = list_begin(&(thread_current()->child_list)); e != list_end(&(thread_current()->child_list)); e = list_next(e)) {
-    child = list_entry(e, struct thread, childelem);
-    if (child_tid == child->tid) {
-      sema_down(&(child->sema_exit));
-      exit_status = child->exit_status;
-      list_remove(&(child->childelem));
-      sema_up(&child->sema_mem);
-      return exit_status;
-    }
-  }
+  if(child == NULL) return -1;
 
-  return -1;
+  sema_down(&(child->sema_exit));
+  exit_status = child->exit_status;
+  list_remove(&(child->childelem));
+  sema_up(&child->sema_mem);
+
+  return exit_status;
 }
 
 /* Free the current process's resources. */
