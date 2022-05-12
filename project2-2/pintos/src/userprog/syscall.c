@@ -77,6 +77,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       check_addr(f -> esp + 24);
       check_addr(f -> esp + 28);
       f -> eax = read(*(uint32_t *) (f -> esp + 20), *(uint32_t *)(f -> esp + 24), *(uint32_t *)(f -> esp + 28));
+
       break;
 
     case SYS_WRITE:
@@ -124,12 +125,13 @@ void exit(int status){
   for(i=3; i<128; i++){
     if(fd_list[i] != NULL) close(i);
   }
-  
+
   thread_exit();
 }
 
 pid_t exec(const char *cmd_line){
-  check_addr(cmd_line);
+  tid_t child_tid = process_execute(cmd_line);
+  if(child_tid == TID_ERROR) return -1;
 
   return process_execute(cmd_line);
 }

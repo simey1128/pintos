@@ -42,10 +42,9 @@ struct thread* get_child(int tid){ //only called by parent thread
 
 tid_t
 process_execute (const char *cmd) 
-{
+{  
   char *fn_copy;
   tid_t tid;
-
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -115,6 +114,7 @@ start_process (void *cmd_)
     exit(-1);
   }
 
+  
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -235,6 +235,23 @@ process_activate (void)
      interrupts. */
   tss_update ();
 }
+
+struct thread* get_child(int tid){ //only called by parent thread
+  struct thread* parent = thread_current();
+  struct list_elem* e;
+  for (e = list_begin (&parent->child_list); e != list_end (&parent->child_list);
+       e = list_next (e))
+  {
+    struct thread *child = list_entry (e, struct thread, childelem);
+    if(child->tid == tid){
+      return child;
+    }
+  }  
+
+  return NULL;
+}
+
+
 
 /* We load ELF binaries.  The following definitions are taken
    from the ELF specification, [ELF1], more-or-less verbatim.  */
