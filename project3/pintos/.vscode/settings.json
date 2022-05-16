@@ -1,0 +1,12 @@
+{
+    "C_Cpp.errorSquiggles": "Disabled",
+    "files.associations": {
+        "file.h": "c",
+        "directory.h": "c",
+        "interrupt.h": "c",
+        "thread.h": "c",
+        "filesys.h": "c",
+        "syscall-nr.h": "c",
+        "stdbool.h": "c"
+    }
+}
