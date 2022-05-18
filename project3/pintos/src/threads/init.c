@@ -31,6 +31,11 @@
 #else
 #include "tests/threads/tests.h"
 #endif
+// #ifdef VM
+#include "vm/frame.h"
+#include "vm/page.h"
+#include "vm/swap.h"
+// #endif
 #ifdef FILESYS
 #include "devices/block.h"
 #include "devices/ide.h"
@@ -97,6 +102,7 @@ main (void)
   /* Initialize memory system. */
   palloc_init (user_page_limit);
   malloc_init ();
+  frame_init();
   paging_init ();
 
   /* Segmentation. */
@@ -148,6 +154,13 @@ bss_init (void)
 {
   extern char _start_bss, _end_bss;
   memset (&_start_bss, 0, &_end_bss - &_start_bss);
+}
+
+static void
+frame_init(void){
+  // ASSERT   # intr handling?
+  list_init(&frame_table);
+  fid_next = 1;
 }
 
 /* Populates the base page directory and page table with the
