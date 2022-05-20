@@ -1,6 +1,7 @@
 #include "vm/frame.h"
 #include "vm/page.h"
 #include "vm/swap.h"
+#include "threads/vaddr.h"
 
 #include "debug.h"
 
@@ -38,6 +39,7 @@ ffree(uint8_t *pte){
             list_remove(e);
             return;
         }
+        e = e->next;
     }
 }
 
