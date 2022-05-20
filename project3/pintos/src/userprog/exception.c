@@ -163,7 +163,7 @@ page_fault (struct intr_frame *f)
   }
 
    //1. spte에 존재하는 경우
-   struct spage_entry* spte = get_spte(fault_addr);
+   struct spage_entry* spte = get_spte((uint32_t)fault_addr&0xfffff000);
    if(spte == NULL) exit(-1);
 
    //2. load spte
@@ -175,23 +175,21 @@ page_fault (struct intr_frame *f)
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
-  kill (f);
+//   printf ("Page fault at %p: %s error %s page in %s context.\n",
+//           fault_addr,
+//           not_present ? "not present" : "rights violation",
+//           write ? "writing" : "reading",
+//           user ? "user" : "kernel");
+//   kill (f);
 }
 
 
 struct spage_entry* get_spte(uint32_t* upage){
-   struct list spage_table = thread_current() -> spage_table;
    struct list_elem *e;
-   for(e=list_begin(&spage_table); e != list_end(&spage_table); e=e->next){
+   for(e=list_begin(&thread_current() -> spage_table); e != list_end(&thread_current() -> spage_table); e=list_next(e)){
       struct spage_entry *spte = list_entry(e, struct spage_entry, elem);
-      if(spte->upage == upage) return spte;
+      if(spte->upage==upage) return spte;
    }
-
    return NULL;
 };
 
@@ -199,7 +197,7 @@ int
 lazy_load_segment (struct spage_entry* spte){
    file_seek (spte->file, spte->ofs);  
 
-   uint8_t *kpage = palloc_get_page (PAL_USER);  
+   uint32_t *kpage = palloc_get_page (PAL_USER);  
    if (kpage == NULL)
         return false;        
 

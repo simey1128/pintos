@@ -35,8 +35,8 @@ ffree(uint32_t *pte){
     while(e != list_end(&frame_table)){
         struct frame_entry *f = list_entry(e, struct frame_entry, elem);
         if(f -> fid == fid){
-            free(e);
-            list_remove(e);
+            list_remove(&f->elem);
+            free(f);
             return;
         }
         e = e->next;
