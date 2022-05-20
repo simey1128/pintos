@@ -98,6 +98,7 @@ struct thread
     /* Owned by userprog/process.c. */
 #ifdef USERPROG
    uint32_t *pagedir;                  /* Page directory. */
+   struct list spage_table;
    struct semaphore sema_exit;
    struct semaphore sema_mem;
    struct semaphore sema_load;

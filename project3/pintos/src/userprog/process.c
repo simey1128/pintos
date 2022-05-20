@@ -218,6 +218,7 @@ process_exit (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
+      spt_free(&cur->spage_table);
     }
   sema_up(&cur->sema_exit);
   sema_down(&cur->sema_mem);
@@ -402,9 +403,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
-              if (!load_segment (file, file_page, (void *) mem_page,
-                                 read_bytes, zero_bytes, writable))
-                goto done;
+              spte_create(file, file_page, (void *)mem_page, read_bytes, zero_bytes, writable);
+              // if (!load_segment (file, file_page, (void *) mem_page,
+              //                    read_bytes, zero_bytes, writable))
+              //   goto done;
             }
           else
             goto done;
