@@ -16,7 +16,7 @@ falloc(uint8_t *kpage, int size){
     if(fid == -1)
         NOT_REACHED();
 
-    struct frame_entry *e;
+    struct frame_entry *e = malloc(sizeof *e);
     e -> fid = fid;
     e -> kpage = kpage;
     e -> accessed = 0;
@@ -34,6 +34,7 @@ ffree(uint8_t *pte){
     while(e != list_end(&frame_table)){
         struct frame_entry *f = list_entry(e, struct frame_entry, elem);
         if(f -> fid == fid){
+            free(e);
             list_remove(e);
             return;
         }
@@ -42,10 +43,14 @@ ffree(uint8_t *pte){
 
 static fid_t
 allocate_fid(void){
-    int i;
     fid_t fid = fid_next;
     if(fid > 0x100000)
         return -1;
+
+    if(list_empty(&frame_table)){
+        fid_next++;
+        return fid;
+    }
     struct list_elem *e = list_begin(&frame_table);
     while(e != list_end(&frame_table)){
         struct frame_entry *cur = list_entry(e, struct frame_entry, elem);
@@ -54,6 +59,7 @@ allocate_fid(void){
             fid_next = cur->fid + 1;
             return fid;
         }
+        e= e->next;
     }
     fid_next = list_size(&frame_table) + 1;
     return fid;
