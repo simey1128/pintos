@@ -150,15 +150,15 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
    if(fault_addr==NULL){
-      PANIC("null");
+      // PANIC("null");
       exit(-1);
    }
    if(!user){
-      PANIC("accessed by kernel");
+      // PANIC("accessed by kernel");
       exit(-1);
    }
    if(is_kernel_vaddr(fault_addr)){
-      PANIC("this is kernel virtual address");
+      // PANIC("this is kernel virtual address");
       exit(-1);
    }
 
