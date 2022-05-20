@@ -1,3 +1,6 @@
+#include "vm/frame.h"
+#include "vm/page.h"
+#include "vm/swap.h"
 #include "userprog/exception.h"
 #include <inttypes.h>
 #include <stdio.h>
@@ -6,11 +9,14 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+#include "threads/palloc.h"
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
+static bool
+install_page (void *upage, void *kpage, bool writable);
 
 /* Registers handlers for interrupts that can be caused by user
    programs.
@@ -149,23 +155,19 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-   if(fault_addr==NULL){
-      // PANIC("null");
-      exit(-1);
-   }
-   if(!user){
-      // PANIC("accessed by kernel");
-      exit(-1);
-   }
-   if(is_kernel_vaddr(fault_addr)){
-      // PANIC("this is kernel virtual address");
-      exit(-1);
-   }
+   
 
-//   if(fault_addr==NULL || !user || is_kernel_vaddr(fault_addr)) {
-//      PANIC("this line");
-     
-//   }
+  if(fault_addr==NULL || !user || is_kernel_vaddr(fault_addr)) {
+     exit(-1);
+  }
+
+  //1. spte에 존재하는 경우
+  struct spage_entry* spte = get_spte(fault_addr);
+  if(spte == NULL) exit(-1);
+
+  //2. load spte
+   if(!lazy_load_segment(spte)) exit(-1);
+
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
@@ -178,3 +180,52 @@ page_fault (struct intr_frame *f)
   kill (f);
 }
 
+
+struct spage_entry* get_spte(uint32_t* upage){
+   struct list spage_table = thread_current() -> spage_table;
+   struct list_elem *e;
+   for(e=list_begin(&spage_table); e != list_end(&spage_table); e=e->next){
+      struct spage_entry *spte = list_entry(e, struct spage_entry, elem);
+      if(spte->upage == upage) return spte;
+   }
+
+   return NULL;
+};
+
+int
+lazy_load_segment (struct spage_entry* spte){
+   file_seek (spte->file, spte->ofs);  
+
+   uint8_t *kpage = palloc_get_page (PAL_USER);  
+   if (kpage == NULL)
+        return false;        
+
+   fid_t fid = falloc(kpage, FRSIZE);
+   if(fid == -1)
+      return false;  
+
+   if (file_read (spte->file, kpage, spte->read_bytes) != (int) spte->read_bytes)
+        {
+          palloc_free_page (kpage);
+          return false; 
+        }
+      memset (kpage + spte->read_bytes, 0, spte->zero_bytes);
+   
+   if (!install_page (spte->upage, kpage, spte->writable)) 
+        {
+          palloc_free_page (kpage);
+          return false;
+        }
+
+   return true;
+}
+static bool
+install_page (void *upage, void *kpage, bool writable)
+{
+  struct thread *t = thread_current ();
+
+  /* Verify that there's not already a page at that virtual
+     address, then map our page there. */
+  return (pagedir_get_page (t->pagedir, upage) == NULL
+          && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}

@@ -9,4 +9,6 @@
 void exception_init (void);
 void exception_print_stats (void);
 
+struct spage_entry* get_spte(uint32_t* upage);
+int lazy_load_segment (struct spage_entry*);
 #endif /* userprog/exception.h */
