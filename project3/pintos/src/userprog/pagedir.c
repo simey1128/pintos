@@ -219,6 +219,23 @@ pagedir_set_accessed (uint32_t *pd, const void *vpage, bool accessed)
         }
     }
 }
+bool pagedir_is_present (uint32_t *pd, const void *upage){
+  uint32_t *pte = lookup_page (pd, upage, false);
+  return pte != NULL && (*pte & PTE_P) != 0;
+}
+void pagedir_set_present (uint32_t *pd, const void *upage, bool present){
+  uint32_t *pte = lookup_page (pd, upage, false);
+  if (pte != NULL) 
+    {
+      if (present)
+        *pte |= PTE_P;
+      else 
+        {
+          *pte &= ~(uint32_t) PTE_P; 
+          // invalidate_pagedir (pd);
+        }
+    }
+}
 
 /* Loads page directory PD into the CPU's page directory base
    register. */

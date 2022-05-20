@@ -8,6 +8,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/pagedir.h"
 
 #include "threads/palloc.h"
 /* Number of page faults processed. */
@@ -161,13 +162,15 @@ page_fault (struct intr_frame *f)
      exit(-1);
   }
 
-  //1. spte에 존재하는 경우
-  struct spage_entry* spte = get_spte(fault_addr);
-  if(spte == NULL) exit(-1);
+   //1. spte에 존재하는 경우
+   struct spage_entry* spte = get_spte(fault_addr);
+   if(spte == NULL) exit(-1);
 
-  //2. load spte
+   //2. load spte
    if(!lazy_load_segment(spte)) exit(-1);
 
+   //3. page tabel entry update(valid bit)
+   pagedir_set_present(thread_current()->pagedir, fault_addr, true);
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
@@ -219,6 +222,7 @@ lazy_load_segment (struct spage_entry* spte){
 
    return true;
 }
+
 static bool
 install_page (void *upage, void *kpage, bool writable)
 {
