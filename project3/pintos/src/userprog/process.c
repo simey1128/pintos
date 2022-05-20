@@ -513,7 +513,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if (kpage == NULL)
         return false;
 
-      falloc(kpage, FRSIZE);
+      fid_t fid = falloc(kpage, FRSIZE);
+      if(fid == -1)
+        return false;
       
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)

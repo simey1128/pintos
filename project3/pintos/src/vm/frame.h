@@ -1,3 +1,6 @@
+#ifndef VM_FRAME_H
+#define VM_FRAME_H
+
 #include <list.h>
 
 #define NUM_FRAME_ENTRY 1024
@@ -5,7 +8,7 @@
 #define FRSIZE (1 << FRBITS)
 
 
-typedef int fid_t;
+typedef uint32_t fid_t;
 typedef bool bit;
 
 fid_t fid_next;
@@ -22,4 +25,9 @@ struct frame_entry{
 
 struct list frame_table;
 
-fid_t falloc(uint8_t *kpage, int size);
+fid_t falloc(uint8_t *, int);
+void ffree(uint8_t *);
+
+bool cmp_fid(const struct list_elem *, const struct list_elem *, void *);
+
+#endif

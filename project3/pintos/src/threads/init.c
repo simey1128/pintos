@@ -63,6 +63,7 @@ static const char *swap_bdev_name;
 static size_t user_page_limit = SIZE_MAX;
 
 static void bss_init (void);
+static void frame_init(void);
 static void paging_init (void);
 
 static char **read_command_line (void);
