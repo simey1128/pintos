@@ -15,7 +15,7 @@ fid_t fid_next;
 
 struct frame_entry{
     fid_t fid;
-    uint8_t *kpage;
+    uint32_t *kpage;
 
     bit accessed;
     bit dirty;
@@ -25,8 +25,8 @@ struct frame_entry{
 
 struct list frame_table;
 
-fid_t falloc(uint8_t *, int);
-void ffree(uint8_t *);
+fid_t falloc(uint32_t *, int);
+void ffree(uint32_t *);
 
 bool cmp_fid(const struct list_elem *, const struct list_elem *, void *);
 

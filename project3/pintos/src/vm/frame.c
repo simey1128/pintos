@@ -11,8 +11,8 @@
 static fid_t allocate_fid(void);
 
 fid_t
-falloc(uint8_t *kpage, int size){
-    fid_t fid = allocate_fid();
+falloc(uint32_t *kpage, int size){
+    fid_t fid = (uint32_t)(kpage - (uint32_t *)PHYS_BASE) >> 12;
 
     if(fid == -1)
         NOT_REACHED();
@@ -29,7 +29,7 @@ falloc(uint8_t *kpage, int size){
 }
 
 void
-ffree(uint8_t *pte){
+ffree(uint32_t *pte){
     fid_t fid = (*pte & 0xfffff000) >> 12;
     struct list_elem *e = list_begin(&frame_table);
     while(e != list_end(&frame_table)){
