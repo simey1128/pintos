@@ -403,10 +403,27 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
-              spte_create(file, file_page, (void *)mem_page, read_bytes, zero_bytes, writable);
-              // if (!load_segment (file, file_page, (void *) mem_page,
-              //                    read_bytes, zero_bytes, writable))
-              //   goto done;
+              ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
+              ASSERT (pg_ofs ((void *)mem_page) == 0);
+              ASSERT (file_page % PGSIZE == 0);
+              while(read_bytes > 0 || zero_bytes > 0){
+                size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+                size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+                struct spage_entry *spte = malloc(sizeof(*spte));
+                spte -> upage = (void *)mem_page;
+                spte -> file = file;
+                spte -> ofs = file_page;
+                spte -> read_bytes = page_read_bytes;
+                spte -> zero_bytes = page_zero_bytes;
+                spte -> writable = writable;
+
+                list_push_back(&thread_current()->spage_table, &spte->elem);
+                read_bytes -= page_read_bytes;
+                zero_bytes -= page_zero_bytes;
+                file_page += page_read_bytes;
+                mem_page = (void *)mem_page + PGSIZE;
+              }
             }
           else
             goto done;
