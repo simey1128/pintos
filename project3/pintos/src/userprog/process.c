@@ -93,7 +93,7 @@ start_process (void *cmd_)
 
   tkn = strtok_r(cmd, " ", &next_tkn);
   for(argc = 0; tkn != NULL; argc++){
-    if(argc>=128) exit(-1);
+    if(argc>=128) exit(-1);   // TODO
     argv[argc] = tkn;
     tkn = strtok_r(NULL, " ", &next_tkn);
   }
@@ -559,6 +559,10 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
+  fid_t fid = falloc(kpage, PGSIZE);
+  if(fid == -1)
+    return false;   // TODO
+  thread_current() -> stack = kpage;
   return success;
 }
 

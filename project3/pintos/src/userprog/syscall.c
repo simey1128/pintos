@@ -10,6 +10,15 @@
 #include <string.h>
 #include "threads/thread.h"
 #include "userprog/process.h"
+#include "threads/palloc.h"
+#include "debug.h"
+
+#include "vm/frame.h"
+#include "vm/page.h"
+#include "vm/swap.h"
+
+
+#define NOT_REACHED() PANIC ("frame overflow");
 
 struct file 
   {
@@ -109,7 +118,21 @@ syscall_handler (struct intr_frame *f UNUSED)
 }
 
 void check_addr(void *uaddr){
+  // 1. user addr인지 check
   if(uaddr == NULL || !is_user_vaddr(uaddr)) exit(-1);
+
+  // 2. stack growth
+  if(uaddr < thread_current() -> stack){
+    uint8_t *kpage = palloc_get_page(PAL_USER);
+    if(kpage == NULL)
+      exit(-1);
+
+    fid_t fid = falloc(kpage, PGSIZE);
+    if(fid == -1)
+      NOT_REACHED();
+
+    thread_current() -> stack = kpage;
+  }
 }
 
 void halt(){
