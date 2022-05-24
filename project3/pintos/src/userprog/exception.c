@@ -17,7 +17,7 @@ static long long page_fault_cnt;
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
 static bool
-install_page (void *upage, void *kpage, bool writable);
+install_page (void *upage, void *kpage, bool writable, uint32_t *pd);
 
 /* Registers handlers for interrupts that can be caused by user
    programs.
@@ -156,7 +156,12 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-   
+//   if(fault_addr==NULL) printf("fault_addr==NULL\n");
+//   if(!user) printf("!user\n");
+//   if(is_kernel_vaddr(fault_addr)) printf("is_kernel_vaddr(fault_addr)\n");
+
+   // printf("fault_addr: %p\n", fault_addr);
+
 
   if(fault_addr==NULL || !user || is_kernel_vaddr(fault_addr)) {
      PANIC("exception validty");
@@ -164,14 +169,15 @@ page_fault (struct intr_frame *f)
   }
 
    //1. spte에 존재하는 경우
-   struct spage_entry* spte = get_spte((uint32_t)fault_addr&0xfffff000);
+   struct thread *t = thread_current();
+   struct spage_entry* spte = get_spte((uint32_t)fault_addr&0xfffff000, t->spt);
    if(spte == NULL) {
       PANIC("spte error");
       exit(-1);
    }
 
    //2. load spte
-   if(!lazy_load_segment(spte)) {
+   if(!lazy_load_segment(spte, t->pagedir)) {
       PANIC("lazy_load_segment error");
       exit(-1);
    }
@@ -191,18 +197,20 @@ page_fault (struct intr_frame *f)
 }
 
 
-struct spage_entry* get_spte(uint32_t* upage){
-   struct spage_entry** spage_table = thread_current()->spt;
+struct spage_entry* get_spte(uint32_t* upage, struct spage_entry **spt){
    int i=0;
    while(i<SPT_MAX){
-      struct spage_entry* spte = spage_table[i];
+      struct spage_entry* spte = spt[i];
       if(spte->upage == upage) return spte;
       i++;
    }
 };
 
 int
-lazy_load_segment (struct spage_entry* spte){
+lazy_load_segment (struct spage_entry* spte, uint32_t *pd){
+   // printf("spte->read_bytes: %d\n", spte->read_bytes);
+   // printf("spte->zero_bytes: %d\n", spte->zero_bytes);
+   // printf("writable: %d\n", spte->writable);
    file_seek (spte->file, spte->ofs);  
 
    uint32_t *kpage = palloc_get_page (PAL_USER);  
@@ -220,7 +228,7 @@ lazy_load_segment (struct spage_entry* spte){
         }
       memset (kpage + spte->read_bytes, 0, spte->zero_bytes);
    
-   if (!install_page (spte->upage, kpage, spte->writable)) 
+   if (!install_page (spte->upage, kpage, spte->writable, pd)) 
         {
           palloc_free_page (kpage);
           return false;
@@ -230,12 +238,10 @@ lazy_load_segment (struct spage_entry* spte){
 }
 
 static bool
-install_page (void *upage, void *kpage, bool writable)
+install_page (void *upage, void *kpage, bool writable, uint32_t *pd)
 {
-  struct thread *t = thread_current ();
-
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
-  return (pagedir_get_page (t->pagedir, upage) == NULL
-          && pagedir_set_page (t->pagedir, upage, kpage, writable));
+  return (pagedir_get_page (pd, upage) == NULL
+          && pagedir_set_page (pd, upage, kpage, writable));
 }

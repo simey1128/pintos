@@ -38,6 +38,7 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
+  // printf("syscall num: %d, tid: %d\n", *(uint8_t *)(f -> esp), thread_current()->tid);
   check_addr((f->esp));
   switch(*(uint8_t *)(f -> esp)){
     case SYS_HALT:
@@ -140,6 +141,7 @@ void halt(){
 }
 
 void exit(int status){
+  // printf("tid: %d\n", thread_current() -> tid);
   thread_current()->exit_status = status;
   printf("%s: exit(%d)\n", thread_name(), status);
 

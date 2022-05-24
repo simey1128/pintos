@@ -215,7 +215,7 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
-      spt_free(&cur->spt);
+      spt_free(&cur->spt, pd);
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
@@ -330,6 +330,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  // printf("file_name: %s\n", file_name);
   file = filesys_open (file_name);
   
   if (file == NULL) 
@@ -403,7 +404,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
-              spte_create(file, file_page, (void *)mem_page, read_bytes, zero_bytes, writable);
+              spte_create(file, file_page, (void *)mem_page, read_bytes, zero_bytes, writable, t->spt);
             }
           else
             goto done;
@@ -530,6 +531,8 @@ load_segment (struct file *file, off_t ofs, uint32_t *upage,
           palloc_free_page (kpage);
           return false;
         }
+
+      hex_dump(0, 0, (uint32_t *)PHYS_BASE - upage, true);
 
       /* Advance. */
       read_bytes -= page_read_bytes;

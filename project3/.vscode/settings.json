@@ -1,6 +1,13 @@
 {
     "files.associations": {
         "*.tcc": "c",
-        "cstdlib": "c"
+        "cstdlib": "c",
+        "flags.h": "c",
+        "thread.h": "c",
+        "vaddr.h": "c",
+        "page.h": "c",
+        "frame.h": "c",
+        "swap.h": "c",
+        "pagedir.h": "c"
     }
 }
