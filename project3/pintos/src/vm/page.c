@@ -3,6 +3,7 @@
 #include "vm/swap.h"
 #include "threads/vaddr.h"
 #include "threads/thread.h"
+#include "userprog/pagedir.h"
 
 #include "debug.h"
 
@@ -36,7 +37,7 @@ spte_create(struct file *file, off_t ofs, void* upage, uint32_t read_bytes, uint
 void spte_insert(struct spage_entry* spte){
     struct spage_entry** spage_table = thread_current()->spt;
     int i=0;
-    while(i<128){
+    while(i<SPT_MAX){
         if(spage_table[i] == NULL){
             spage_table[i] = spte;
             break;
@@ -49,6 +50,7 @@ void spt_free(struct spage_entry** spt){
     int i=0;
     while(i<SPT_MAX){
         if(spt[i] != NULL){
+            pagedir_clear_page(thread_current()->pagedir, spt[i]->upage);
             free(spt[i]);
             spt[i] = NULL;
         }
