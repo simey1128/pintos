@@ -218,6 +218,11 @@ thread_create (const char *name, int priority,
     fd_list[i] = NULL;
   }
 
+  struct spage_entry** spt = t->spt;
+  for(i=0; i<SPT_MAX; i++){
+    spt[i] = NULL;
+  }
+
   intr_set_level (old_level);
 
   /* Add to run queue. */

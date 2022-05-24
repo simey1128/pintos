@@ -24,7 +24,8 @@ spte_create(struct file *file, off_t ofs, void* upage, uint32_t read_bytes, uint
         spte -> zero_bytes = page_zero_bytes;
         spte -> writable = writable;
 
-        list_push_back(&thread_current()->spage_table, &spte->elem);
+        // list_push_back(&thread_current()->spage_table, &spte->elem);
+        spte_insert(spte);
         /* Advance. */
         read_bytes -= page_read_bytes;
         zero_bytes -= page_zero_bytes;
@@ -32,12 +33,25 @@ spte_create(struct file *file, off_t ofs, void* upage, uint32_t read_bytes, uint
         upage += PGSIZE;
     }
 }
+void spte_insert(struct spage_entry* spte){
+    struct spage_entry** spage_table = thread_current()->spt;
+    int i=0;
+    while(i<128){
+        if(spage_table[i] == NULL){
+            spage_table[i] = spte;
+            break;
+        }
+        i++;
+    }
+}
 
-void spt_free(struct list *spage_table){
-    struct list_elem *e;
-    for(e = list_begin(spage_table); e != list_end(spage_table); e = list_next(e)){
-        struct spage_entry *spte = list_entry(e, struct spage_entry, elem);
-        list_remove(&spte->elem);
-        free(spte);
+void spt_free(struct spage_entry** spt){
+    int i=0;
+    while(i<SPT_MAX){
+        if(spt[i] != NULL){
+            free(spt[i]);
+            spt[i] = NULL;
+        }
+        i++;
     }
 }

@@ -215,7 +215,7 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
-      spt_free(&cur->spage_table);
+      spt_free(&cur->spt);
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
@@ -556,10 +556,10 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
-  fid_t fid = falloc(kpage, PGSIZE);
-  if(fid == -1)
-    return false;   // TODO
-  thread_current() -> stack = kpage;
+  // fid_t fid = falloc(kpage, PGSIZE);
+  // if(fid == -1)
+  //   return false;   // TODO
+  // thread_current() -> stack = kpage;
   return success;
 }
 

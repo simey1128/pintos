@@ -16,6 +16,7 @@ struct spage_entry{
 
 struct list spage_table;
 
+void spte_insert(struct spage_entry* spte);
 void spte_create(struct file *file, off_t ofs, void *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable);
-void spt_free(struct list *);
+void spt_free(struct spage_entry** spt);
 void update_pte(uint32_t* pd, uint32_t* upage);

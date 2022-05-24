@@ -159,15 +159,22 @@ page_fault (struct intr_frame *f)
    
 
   if(fault_addr==NULL || !user || is_kernel_vaddr(fault_addr)) {
+     PANIC("exception validty");
      exit(-1);
   }
 
    //1. spte에 존재하는 경우
    struct spage_entry* spte = get_spte((uint32_t)fault_addr&0xfffff000);
-   if(spte == NULL) exit(-1);
+   if(spte == NULL) {
+      PANIC("spte error");
+      exit(-1);
+   }
 
    //2. load spte
-   if(!lazy_load_segment(spte)) exit(-1);
+   if(!lazy_load_segment(spte)) {
+      PANIC("lazy_load_segment error");
+      exit(-1);
+   }
 
    //3. page tabel entry update(valid bit)
    pagedir_set_present(thread_current()->pagedir, fault_addr, true);
@@ -185,12 +192,13 @@ page_fault (struct intr_frame *f)
 
 
 struct spage_entry* get_spte(uint32_t* upage){
-   struct list_elem *e;
-   for(e=list_begin(&thread_current() -> spage_table); e != list_end(&thread_current() -> spage_table); e=list_next(e)){
-      struct spage_entry *spte = list_entry(e, struct spage_entry, elem);
-      if(spte->upage==upage) return spte;
+   struct spage_entry** spage_table = thread_current()->spt;
+   int i=0;
+   while(i<SPT_MAX){
+      struct spage_entry* spte = spage_table[i];
+      if(spte->upage == upage) return spte;
+      i++;
    }
-   return NULL;
 };
 
 int
