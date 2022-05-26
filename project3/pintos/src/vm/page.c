@@ -7,6 +7,8 @@
 
 #include "debug.h"
 
+#define NOT_REACHED() PANIC ("OVER SPT_MAX");
+
 
 void
 spte_create(struct file *file, off_t ofs, void* upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable, struct spage_entry **spt){
@@ -39,10 +41,11 @@ void spte_insert(struct spage_entry* spte, struct spage_entry **spt){
     while(i<SPT_MAX){
         if(spt[i] == NULL){
             spt[i] = spte;
-            break;
+            return;
         }
         i++;
     }
+    // NOT_REACHED ();
 }
 
 void spt_free(struct spage_entry** spt, uint32_t *pd){

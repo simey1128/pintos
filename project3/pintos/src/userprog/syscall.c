@@ -123,17 +123,17 @@ void check_addr(void *uaddr){
   if(uaddr == NULL || !is_user_vaddr(uaddr)) exit(-1);
 
   // 2. stack growth
-  // if(uaddr < thread_current() -> stack){
-  //   uint8_t *kpage = palloc_get_page(PAL_USER);
-  //   if(kpage == NULL)
-  //     exit(-1);
+  if(uaddr < thread_current() -> stack){
+    uint8_t *kpage = palloc_get_page(PAL_USER);
+    if(kpage == NULL)
+      exit(-1);
 
-  //   fid_t fid = falloc(kpage, PGSIZE);
-  //   if(fid == -1)
-  //     NOT_REACHED();
+    fid_t fid = falloc(kpage, PGSIZE);
+    if(fid == -1)
+      NOT_REACHED();
 
-  //   thread_current() -> stack = kpage;
-  // }
+    thread_current() -> stack = kpage;
+  }
 }
 
 void halt(){

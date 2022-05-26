@@ -164,7 +164,7 @@ page_fault (struct intr_frame *f)
 
 
   if(fault_addr==NULL || !user || is_kernel_vaddr(fault_addr)) {
-     PANIC("exception validty");
+   //   PANIC("exception validty");
      exit(-1);
   }
 
@@ -172,13 +172,13 @@ page_fault (struct intr_frame *f)
    struct thread *t = thread_current();
    struct spage_entry* spte = get_spte((uint32_t)fault_addr&0xfffff000);
    if(spte == NULL) {
-      PANIC("spte error");
+      // PANIC("spte error");
       exit(-1);
    }
 
    //2. load spte
    if(!lazy_load_segment(spte)) {
-      PANIC("lazy_load_segment error");
+      // PANIC("lazy_load_segment error");
       exit(-1);
    }
 
@@ -214,10 +214,12 @@ lazy_load_segment (struct spage_entry* spte){
    file_seek (spte->file, spte->ofs);  
 
    uint32_t *kpage = palloc_get_page (PAL_USER);  
-   if (kpage == NULL)
-        return false;        
+   if (kpage == NULL){
+      reclaim(spte->upage);
+      kpage = palloc_get_page(PAL_USER);
+   }
 
-   fid_t fid = falloc(kpage, FRSIZE);
+   fid_t fid = falloc(kpage, spte->upage);
    if(fid == -1)
       return false;  
 
