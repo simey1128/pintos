@@ -17,7 +17,7 @@ static long long page_fault_cnt;
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
 static bool
-install_page (void *upage, void *kpage, bool writable, uint32_t *pd);
+install_page (void *upage, void *kpage, bool writable);
 
 /* Registers handlers for interrupts that can be caused by user
    programs.
@@ -170,14 +170,14 @@ page_fault (struct intr_frame *f)
 
    //1. spte에 존재하는 경우
    struct thread *t = thread_current();
-   struct spage_entry* spte = get_spte((uint32_t)fault_addr&0xfffff000, t->spt);
+   struct spage_entry* spte = get_spte((uint32_t)fault_addr&0xfffff000);
    if(spte == NULL) {
       PANIC("spte error");
       exit(-1);
    }
 
    //2. load spte
-   if(!lazy_load_segment(spte, t->pagedir)) {
+   if(!lazy_load_segment(spte)) {
       PANIC("lazy_load_segment error");
       exit(-1);
    }
@@ -197,17 +197,17 @@ page_fault (struct intr_frame *f)
 }
 
 
-struct spage_entry* get_spte(uint32_t* upage, struct spage_entry **spt){
+struct spage_entry* get_spte(uint32_t* upage){
    int i=0;
    while(i<SPT_MAX){
-      struct spage_entry* spte = spt[i];
+      struct spage_entry* spte = thread_current()->spt[i];
       if(spte->upage == upage) return spte;
       i++;
    }
 };
 
 int
-lazy_load_segment (struct spage_entry* spte, uint32_t *pd){
+lazy_load_segment (struct spage_entry* spte){
    // printf("spte->read_bytes: %d\n", spte->read_bytes);
    // printf("spte->zero_bytes: %d\n", spte->zero_bytes);
    // printf("writable: %d\n", spte->writable);
@@ -228,7 +228,7 @@ lazy_load_segment (struct spage_entry* spte, uint32_t *pd){
         }
       memset (kpage + spte->read_bytes, 0, spte->zero_bytes);
    
-   if (!install_page (spte->upage, kpage, spte->writable, pd)) 
+   if (!install_page (spte->upage, kpage, spte->writable)) 
         {
           palloc_free_page (kpage);
           return false;
@@ -238,10 +238,10 @@ lazy_load_segment (struct spage_entry* spte, uint32_t *pd){
 }
 
 static bool
-install_page (void *upage, void *kpage, bool writable, uint32_t *pd)
+install_page (void *upage, void *kpage, bool writable)
 {
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
-  return (pagedir_get_page (pd, upage) == NULL
-          && pagedir_set_page (pd, upage, kpage, writable));
+  return (pagedir_get_page (thread_current()->pagedir, upage) == NULL
+          && pagedir_set_page (thread_current()->pagedir, upage, kpage, writable));
 }
