@@ -15,6 +15,7 @@ fid_t fid_next;
 
 struct frame_entry{
     fid_t fid;
+    uint32_t *pd;
     uint32_t *upage;
     uint32_t *kpage;
 

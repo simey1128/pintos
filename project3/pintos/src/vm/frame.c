@@ -21,6 +21,7 @@ falloc(uint32_t *kpage, uint32_t *upage){
 
     struct frame_entry *e = malloc(sizeof *e);
     e -> fid = fid;
+    e -> pd = thread_current() -> pagedir;
     e -> upage = upage;
     e -> kpage = kpage;
     e -> accessed = 0;
@@ -57,7 +58,7 @@ void reclaim(uint32_t *upage){   // upage: demand upage (굴러온돌)
     while(e != list_end(&frame_table)){
         struct frame_entry *fte = list_entry(e, struct frame_entry, elem);
         if(fte->dirty==0 && fte->accessed==0){
-            pagedir_set_present(thread_current()->pagedir, fte->upage, false);   // fte->upage: reclaim 대상 (박힌돌)
+            pagedir_set_present(fte->pd, fte->upage, false);   // fte->upage: reclaim 대상 (박힌돌)
             swap_out(fte);
             break;
         }
