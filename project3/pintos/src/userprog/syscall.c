@@ -12,6 +12,7 @@
 #include "userprog/process.h"
 #include "threads/palloc.h"
 #include "debug.h"
+#include "userprog/pagedir.h"
 
 #include "vm/frame.h"
 #include "vm/page.h"
@@ -106,7 +107,7 @@ void check_addr(void *uaddr){
   if(uaddr == NULL || !is_user_vaddr(uaddr)) exit(-1);
 
   // 2. stack growth
-  if(uaddr < thread_current() -> stack){
+  if(uaddr < thread_current() -> esp){
     uint32_t *upage = (uint32_t *)((uint32_t)uaddr & 0xfffff000);
     uint8_t *kpage = palloc_get_page(PAL_USER);
 
@@ -120,7 +121,7 @@ void check_addr(void *uaddr){
     if(fid == -1)
       PANIC("syscall, fid==-1 error");
 
-    thread_current() -> stack = upage;
+    thread_current() -> esp = upage;
 
     struct swap_entry* se = get_swap_entry(thread_current()->pagedir, upage);
 
@@ -131,7 +132,7 @@ void check_addr(void *uaddr){
     {
       palloc_free_page (kpage);
       
-      PANIC("syscall, insall_page error");
+      PANIC("syscall, install_page error");
     }
 }
  

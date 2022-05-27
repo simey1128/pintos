@@ -115,6 +115,7 @@ struct thread
 
    struct file *current_file;
    struct spage_entry* spt[SPT_MAX];
+   void* esp;
   };
 
 /* If false (default), use round-robin scheduler.

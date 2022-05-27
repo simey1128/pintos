@@ -510,7 +510,7 @@ setup_stack (void **esp)
   fid_t fid = falloc(kpage, ((uint8_t *) PHYS_BASE) - PGSIZE);
   if(fid == -1)
     return false;   // TODO
-  thread_current() -> stack = ((uint8_t *) PHYS_BASE) - PGSIZE;
+  thread_current()->esp = ((uint8_t *) PHYS_BASE) - PGSIZE;
   return success;
 }
 

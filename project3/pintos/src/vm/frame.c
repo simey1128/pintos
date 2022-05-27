@@ -24,8 +24,6 @@ falloc(uint32_t *kpage, uint32_t *upage){
     e -> pd = thread_current() -> pagedir;
     e -> upage = upage;
     e -> kpage = kpage;
-    e -> accessed = 0;
-    e -> dirty = 0;
 
     list_insert_ordered(&frame_table, &e->elem, cmp_fid, NULL);
     return fid;
@@ -56,20 +54,23 @@ void reclaim(uint32_t *upage){   // upage: demand upage (굴러온돌)
     struct list_elem *e = list_begin(&frame_table);
     while(e != list_end(&frame_table)){
         struct frame_entry *fte = list_entry(e, struct frame_entry, elem);
-        if(fte->dirty==0 && fte->accessed==0){
-            pagedir_set_present(fte->pd, fte->upage, false);   // fte->upage: reclaim 대상 (박힌돌)
+        bool dirty = pagedir_is_dirty(fte->pd, fte->upage);
+        bool accessed = pagedir_is_accessed(fte->pd, fte->upage);
+
+        if(!dirty && !accessed){
+            pagedir_clear_page(fte->pd, fte->upage);   // fte->upage: reclaim 대상 (박힌돌)
             swap_out(fte);
             break;
         }
         // 1. check a dirty_bit
-        if(fte->dirty == 1){
+        if(dirty){
             //write back
             // fte->dirty = 0;
         }
 
         // 2. check a accessed_bit
-        if(fte->accessed == 1){
-            fte->accessed = 0;
+        if(accessed){
+            pagedir_set_accessed(fte->pd,fte->upage, false);
         }
         e = list_next(e);
     }
