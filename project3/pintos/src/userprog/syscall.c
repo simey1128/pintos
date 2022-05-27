@@ -46,70 +46,51 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
 
     case SYS_EXIT:
-      check_addr(f -> esp + 4);
       exit(*(uint32_t *)(f -> esp + 4));
       break;
 
     case SYS_EXEC:
-      check_addr(f -> esp + 4);
       f->eax = exec(*(uint32_t *)(f -> esp + 4));
       break;
 
     case SYS_WAIT:
-      check_addr(f -> esp + 4);
       f -> eax = wait(*(uint32_t *)(f -> esp + 4));
       break;
 
     case SYS_CREATE:
-      check_addr(f -> esp + 16);
-      int success = create(*(uint32_t *)(f -> esp + 16), *(unsigned *)(f -> esp + 20));
-      f->eax = success;
+      f->eax = create(*(uint32_t *)(f -> esp + 16), *(unsigned *)(f -> esp + 20));
       break;
 
     case SYS_REMOVE:
-      check_addr(f -> esp + 4);
       f -> eax = remove(*(uint32_t *)(f -> esp + 4));
       break;
 
     case SYS_OPEN:
-      check_addr(f -> esp + 4);
-      int fd = open(*(uint32_t *)(f -> esp + 4));
-      f -> eax = fd;
+      f -> eax = open(*(uint32_t *)(f -> esp + 4));
       break;
 
     case SYS_FILESIZE:
-      check_addr(f -> esp + 4);
       f -> eax = filesize(*(uint32_t *)(f -> esp + 4));
       break;
 
     case SYS_READ:
-      check_addr(f -> esp + 20);
-      check_addr(f -> esp + 24);
-      check_addr(f -> esp + 28);
       f -> eax = read(*(uint32_t *) (f -> esp + 20), *(uint32_t *)(f -> esp + 24), *(uint32_t *)(f -> esp + 28));
 
       break;
 
     case SYS_WRITE:
-      check_addr(f -> esp + 20);
-      check_addr(f -> esp + 24);
-      check_addr(f -> esp + 28);
       f -> eax = write(*(uint32_t *) (f -> esp + 20), *(uint32_t *)(f -> esp + 24), *(uint32_t *)(f -> esp + 28));
       break;
 
     case SYS_SEEK:
-      check_addr(f -> esp + 16);
-      check_addr(f -> esp + 20);
       seek(*(uint32_t *)(f -> esp + 16), *(unsigned *)(f -> esp + 20));
       break;
 
     case SYS_TELL:
-      check_addr(f -> esp + 4);
       f -> eax = tell(*(uint32_t *)(f -> esp + 4));
       break;
 
     case SYS_CLOSE:
-      check_addr(f -> esp + 4);
       close(*(uint32_t *) (f -> esp + 4));
       break;
 
@@ -128,11 +109,12 @@ void check_addr(void *uaddr){
     if(kpage == NULL)
       exit(-1);
 
-    fid_t fid = falloc(kpage, PGSIZE);
+    uint32_t *upage = (uint32_t *)((uint32_t)uaddr & 0xfffff000);
+    fid_t fid = falloc(kpage, upage);
     if(fid == -1)
       NOT_REACHED();
 
-    thread_current() -> stack = kpage;
+    thread_current() -> stack = upage;
   }
 }
 
@@ -155,8 +137,6 @@ void exit(int status){
 }
 
 pid_t exec(const char *cmd_line){
-  check_addr(cmd_line);
-
   return process_execute(cmd_line);
 }
 
@@ -165,8 +145,6 @@ int wait(pid_t pid){
 }
 
 int create(const char* file, unsigned initial_size){
-  check_addr(file);
-
   if(strlen(file)>128) return 0; // userprog/create-long
   if(strlen(file) == 0) exit(-1); // userprog/create-empty
 
@@ -174,7 +152,6 @@ int create(const char* file, unsigned initial_size){
 }
 
 int remove(const char *file){
-  check_addr(file);
   if(file == NULL){
     exit(-1);
   }
@@ -182,8 +159,6 @@ int remove(const char *file){
 }
 
 int open(const char* file){
-  check_addr(file);
-
   lock_acquire(&filesys_lock);
   struct file* file_opened = filesys_open(file);
  
@@ -212,9 +187,6 @@ int filesize(int fd){
 }
 
 int read(int fd, void *buffer, unsigned size){
-  check_addr(buffer);
-  check_addr(buffer+size-1);
-
   if(fd >= 128) return -1;
   int read_value;
   if(fd == 0){
@@ -230,9 +202,6 @@ int read(int fd, void *buffer, unsigned size){
 }
 
 int write(int fd, const void *buffer, unsigned size){
-  check_addr(buffer);
-  check_addr(buffer+size-1);
-
   if(fd >= 128) return -1;
   int write_value;
   lock_acquire(&filesys_lock);

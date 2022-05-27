@@ -71,8 +71,6 @@ void reclaim(uint32_t *upage){   // upage: demand upage (굴러온돌)
         if(fte->accessed == 1){
             fte->accessed = 0;
         }
-            
-        }
-
         e = list_next(e);
+    }
 }

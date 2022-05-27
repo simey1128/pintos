@@ -559,10 +559,10 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
-  fid_t fid = falloc(kpage, PGSIZE);
+  fid_t fid = falloc(kpage, ((uint8_t *) PHYS_BASE) - PGSIZE);
   if(fid == -1)
     return false;   // TODO
-  thread_current() -> stack = kpage;
+  thread_current() -> stack = ((uint8_t *) PHYS_BASE) - PGSIZE;
   return success;
 }
 

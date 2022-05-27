@@ -213,7 +213,7 @@ lazy_load_segment (struct spage_entry* spte){
    // printf("writable: %d\n", spte->writable);
    file_seek (spte->file, spte->ofs);  
 
-   uint32_t *kpage = palloc_get_page (PAL_USER);  
+   uint32_t *kpage = palloc_get_page (PAL_USER);
    if (kpage == NULL){
       reclaim(spte->upage);
       kpage = palloc_get_page(PAL_USER);
