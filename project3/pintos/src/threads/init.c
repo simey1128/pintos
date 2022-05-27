@@ -161,6 +161,7 @@ static void
 frame_init(void){
   // ASSERT   # intr handling?
   list_init(&frame_table);
+  swap_init();
   fid_next = 1;
 }
 

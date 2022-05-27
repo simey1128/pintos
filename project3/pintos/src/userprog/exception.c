@@ -223,13 +223,20 @@ lazy_load_segment (struct spage_entry* spte){
    if(fid == -1)
       return false;  
 
-   if (file_read (spte->file, kpage, spte->read_bytes) != (int) spte->read_bytes)
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
+   struct swap_entry* se = get_swap_entry(thread_current()->pagedir, spte->upage);
+
+   if(se == NULL){ // page is not swapped out
+      if (file_read (spte->file, kpage, spte->read_bytes) != (int) spte->read_bytes)
+      {
+         palloc_free_page (kpage);
+         return false; 
+      }
       memset (kpage + spte->read_bytes, 0, spte->zero_bytes);
+   }
+
+   else swap_in(kpage, se);
    
+
    if (!install_page (spte->upage, kpage, spte->writable)) 
         {
           palloc_free_page (kpage);

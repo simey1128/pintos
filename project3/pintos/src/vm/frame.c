@@ -8,7 +8,7 @@
 #include "debug.h"
 
 
-#define NOT_REACHED() PANIC ("frame overflow");
+#define NOT_REACHED() PANIC ("frame, frame overflow");
 
 static fid_t allocate_fid(void);
 
@@ -28,7 +28,6 @@ falloc(uint32_t *kpage, uint32_t *upage){
     e -> dirty = 0;
 
     list_insert_ordered(&frame_table, &e->elem, cmp_fid, NULL);
-
     return fid;
 }
 

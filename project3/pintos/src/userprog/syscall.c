@@ -18,7 +18,9 @@
 #include "vm/swap.h"
 
 
-#define NOT_REACHED() PANIC ("frame overflow");
+#define NOT_REACHED() PANIC ("syscall, frame overflow");
+static bool
+install_page (void *upage, void *kpage, bool writable);
 
 struct file 
   {
@@ -105,17 +107,43 @@ void check_addr(void *uaddr){
 
   // 2. stack growth
   if(uaddr < thread_current() -> stack){
-    uint8_t *kpage = palloc_get_page(PAL_USER);
-    if(kpage == NULL)
-      exit(-1);
-
     uint32_t *upage = (uint32_t *)((uint32_t)uaddr & 0xfffff000);
+    uint8_t *kpage = palloc_get_page(PAL_USER);
+
+    if (kpage == NULL){
+      reclaim(upage);
+      kpage = palloc_get_page(PAL_USER);
+    }
+
+    
     fid_t fid = falloc(kpage, upage);
     if(fid == -1)
-      NOT_REACHED();
+      PANIC("syscall, fid==-1 error");
 
     thread_current() -> stack = upage;
-  }
+
+    struct swap_entry* se = get_swap_entry(thread_current()->pagedir, upage);
+
+    if(se==NULL); // 
+    else swap_in(kpage, se);
+
+    if (!install_page (upage, kpage, true)) 
+    {
+      palloc_free_page (kpage);
+      
+      PANIC("syscall, insall_page error");
+    }
+}
+ 
+
+}
+static bool
+install_page (void *upage, void *kpage, bool writable)
+{
+  /* Verify that there's not already a page at that virtual
+     address, then map our page there. */
+  return (pagedir_get_page (thread_current()->pagedir, upage) == NULL
+          && pagedir_set_page (thread_current()->pagedir, upage, kpage, writable));
 }
 
 void halt(){
