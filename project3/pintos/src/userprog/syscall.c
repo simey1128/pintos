@@ -94,6 +94,10 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_CLOSE:
       close(*(uint32_t *) (f -> esp + 4));
       break;
+    
+    case SYS_MMAP:
+      f -> eax = mmap(*(uint32_t *)(f -> esp + 16), *(uint32_t *)(f -> esp + 20));
+      break;
 
     default: 
       exit(-1);
@@ -267,4 +271,15 @@ void close(int fd){
 
   cur_thread->fd_list[fd] = NULL;
   return file_close(file);
+}
+
+mapid_t mmap(int fd, void *addr){
+  struct thread *t = thread_current();
+  struct mmap_entry *me = malloc(sizeof(*me));
+  me -> mapid = fd;
+  me -> file = t -> fd_list[fd];
+  // me -> mapped_pages = 
+  me -> start_addr = addr;
+
+  list_push_back(&t->mmap_table, &me->elem);
 }

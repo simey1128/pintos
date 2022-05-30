@@ -4,6 +4,7 @@
 #include "threads/synch.h"
 
 typedef int pid_t;
+typedef int mapid_t;
 struct lock filesys_lock;
 
 void syscall_init (void);
@@ -21,4 +22,5 @@ int write(int, const void *, unsigned);
 void seek(int, unsigned);
 unsigned tell(int);
 void close(int);
+mapid_t mmap(int, void *);
 #endif /* userprog/syscall.h */
