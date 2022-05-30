@@ -12,6 +12,31 @@
 
 #include "threads/palloc.h"
 /* Number of page faults processed. */
+struct inode_disk
+  {
+    block_sector_t start;               /* First data sector. */
+    off_t length;                       /* File size in bytes. */
+    unsigned magic;                     /* Magic number. */
+    uint32_t unused[125];               /* Not used. */
+  };
+struct file 
+  {
+    struct inode *inode;        /* File's inode. */
+    off_t pos;                  /* Current position. */
+    bool deny_write;            /* Has file_deny_write() been called? */
+  };
+
+struct inode 
+  {
+    struct list_elem elem;              /* Element in inode list. */
+    block_sector_t sector;              /* Sector number of disk location. */
+    int open_cnt;                       /* Number of openers. */
+    bool removed;                       /* True if deleted, false otherwise. */
+    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
+    struct inode_disk data;             /* Inode content. */
+  };
+
+
 static long long page_fault_cnt;
 
 static void kill (struct intr_frame *);
@@ -196,8 +221,17 @@ page_fault (struct intr_frame *f)
       }
       return;
    }
+
+   // 2. mapped file
+   struct mmap_entry *me = get_me(fault_addr);
+   if(me != NULL){
+      int tmp = load_mapped_file(me, fault_addr);
+      if(tmp == -1)
+         exit(-1);
+      return;
+   }
    
-   // 2. spte에 존재하는 경우
+   // 3. spte에 존재하는 경우
    struct thread *t = thread_current();
    struct spage_entry* spte = get_spte((uint32_t)fault_addr&0xfffff000);
    if(spte == NULL) {
@@ -205,7 +239,7 @@ page_fault (struct intr_frame *f)
       exit(-1);
    }
 
-   //2. load spte
+   //4. load spte
    if(!lazy_load_segment(spte)) {
       // PANIC("lazy_load_segment error");
       exit(-1);
@@ -233,7 +267,20 @@ struct spage_entry* get_spte(uint32_t* upage){
       if(spte->upage == upage) return spte;
       i++;
    }
-};
+}
+
+struct mmap_entry* get_me(uint32_t *uaddr){
+   struct list_elem *e = list_begin(&thread_current()->mmap_table);
+   while(e != list_end(&thread_current()->mmap_table)){
+      struct mmap_entry *me = list_entry(e, struct mmap_entry, elem);
+      int32_t size = me -> file -> inode -> data.length;
+      if (uaddr >= me -> start_addr && uaddr < me->start_addr+size){
+         return me;
+      }
+      e = list_next(e);
+   }
+   return NULL;
+}
 
 int
 lazy_load_segment (struct spage_entry* spte){
@@ -271,6 +318,38 @@ lazy_load_segment (struct spage_entry* spte){
           palloc_free_page (kpage);
           return false;
         }
+
+   return true;
+}
+
+int load_mapped_file(struct mmap_entry *me, uint32_t *uaddr){
+   uint8_t *kpage = palloc_get_page(PAL_USER);
+   uint32_t *upage = (uint32_t)uaddr & 0xfffff000;
+   if(kpage == NULL){
+      reclaim(upage);
+      kpage = palloc_get_page(PAL_USER);
+   }
+
+   fid_t fid = falloc(kpage, upage);
+   if(fid == -1)
+      return false;  
+
+   struct swap_entry* se = get_swap_entry(thread_current()->pagedir, upage);
+
+   if(se == NULL){ // page is not swapped out
+      int read_bytes = file_read(me -> file, (void *)kpage, PGSIZE);
+      if (read_bytes > PGSIZE){
+         palloc_free_page (kpage);
+         return false;
+      }
+      memset (kpage + read_bytes, 0, PGSIZE - read_bytes);
+   } else swap_in(kpage, se);
+   
+
+   if (!install_page (upage, kpage, true)) {
+      palloc_free_page (kpage);
+      return false;
+   }
 
    return true;
 }

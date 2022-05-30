@@ -1,6 +1,7 @@
 #include <list.h>
 #include "filesys/off_t.h"
 
+typedef int mapid_t;
 
 struct spage_entry{
     uint32_t *upage;
@@ -14,7 +15,14 @@ struct spage_entry{
     struct list_elem elem;
 };
 
-struct list spage_table;
+struct mmap_entry{
+    mapid_t mapid;
+    struct file *file;
+    struct list mapped_pages;
+    uint32_t *start_addr;
+
+    struct list_elem elem;
+};
 
 void spte_insert(struct spage_entry* spte, struct spage_entry **spt);
 void spte_create(struct file *file, off_t ofs, void *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable, struct spage_entry **spt);

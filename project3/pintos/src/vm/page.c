@@ -27,7 +27,6 @@ spte_create(struct file *file, off_t ofs, void* upage, uint32_t read_bytes, uint
         spte -> zero_bytes = page_zero_bytes;
         spte -> writable = writable;
 
-        // list_push_back(&thread_current()->spage_table, &spte->elem);
         spte_insert(spte, spt);
         /* Advance. */
         read_bytes -= page_read_bytes;

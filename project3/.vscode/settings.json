@@ -8,6 +8,8 @@
         "page.h": "c",
         "frame.h": "c",
         "swap.h": "c",
-        "pagedir.h": "c"
+        "pagedir.h": "c",
+        "off_t.h": "c",
+        "process.h": "c"
     }
 }
