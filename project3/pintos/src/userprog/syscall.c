@@ -41,8 +41,6 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  // printf("syscall num: %d, tid: %d\n", *(uint8_t *)(f -> esp), thread_current()->tid);
-  check_addr((f->esp));
   switch(*(uint8_t *)(f -> esp)){
     case SYS_HALT:
       halt();
@@ -102,42 +100,44 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 }
 
-void check_addr(void *uaddr){
-  // 1. user addr인지 check
-  if(uaddr == NULL || !is_user_vaddr(uaddr)) exit(-1);
+// void check_addr(void *uaddr){
+//   // 1. user addr인지 check
+//   if(uaddr == NULL || !is_user_vaddr(uaddr)) exit(-1);
 
-  // 2. stack growth
-  if(uaddr < thread_current() -> esp){
-    uint32_t *upage = (uint32_t *)((uint32_t)uaddr & 0xfffff000);
-    uint8_t *kpage = palloc_get_page(PAL_USER);
+//   // 2. stack growth
+//   if(uaddr < thread_current() -> esp){
+//     uint32_t *upage = (uint32_t *)((uint32_t)uaddr & 0xfffff000 - PGSIZE);
+//     uint8_t *kpage = palloc_get_page(PAL_USER);
+//     // printf("upage: %p\n", upage);
+//     // printf("kpage: %p\n", kpage);
 
-    if (kpage == NULL){
-      reclaim(upage);
-      kpage = palloc_get_page(PAL_USER);
-    }
+//     if (kpage == NULL){
+//       reclaim(upage);
+//       kpage = palloc_get_page(PAL_USER);
+//     }
 
     
-    fid_t fid = falloc(kpage, upage);
-    if(fid == -1)
-      PANIC("syscall, fid==-1 error");
+//     fid_t fid = falloc(kpage, upage);
+//     if(fid == -1)
+//       PANIC("syscall, fid==-1 error");
 
-    thread_current() -> esp = upage;
+//     thread_current() -> esp = upage;
 
-    struct swap_entry* se = get_swap_entry(thread_current()->pagedir, upage);
+//     struct swap_entry* se = get_swap_entry(thread_current()->pagedir, upage);
 
-    if(se==NULL); // 
-    else swap_in(kpage, se);
+//     if(se==NULL); // 
+//     else swap_in(kpage, se);
 
-    if (!install_page (upage, kpage, true)) 
-    {
-      palloc_free_page (kpage);
+//     if (!install_page (upage, kpage, true)) 
+//     {
+//       palloc_free_page (kpage);
       
-      PANIC("syscall, install_page error");
-    }
-}
+//       PANIC("syscall, install_page error");
+//     }
+// }
  
 
-}
+// }
 static bool
 install_page (void *upage, void *kpage, bool writable)
 {
