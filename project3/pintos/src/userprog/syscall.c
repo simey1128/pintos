@@ -102,6 +102,9 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_MMAP:
       f -> eax = mmap(*(uint32_t *)(f -> esp + 16), *(uint32_t *)(f -> esp + 20));
       break;
+    case SYS_MUNMAP:
+      munmap(*(uint32_t *)(f -> esp + 4));
+      break;
 
     default: 
       exit(-1);
@@ -144,8 +147,14 @@ void exit(int status){
   struct file **fd_list = thread_current()->fd_list;
   int i;
   for(i=3; i<128; i++){
-    if(fd_list[i] != NULL) close(i);
+    if(fd_list[i] != NULL){
+      munmap(i);
+      close(i);
+    }
+
   }
+
+  
 
   thread_exit();
 }
@@ -271,4 +280,21 @@ mapid_t mmap(int fd, void *addr){
   me -> start_addr = addr;
 
   list_push_back(&t->mmap_table, &me->elem);
+
+  return me->mapid;
+}
+void munmap(mapid_t mapid){
+  struct list_elem* e = list_begin(&thread_current()->mmap_table);
+  while(e!=list_end(&thread_current()->mmap_table)){
+    struct mmap_entry* me = list_entry(e, struct mmap_entry, elem);
+    if(me->mapid == mapid){
+      
+      list_remove(&me->elem);
+      // file_write(me->file, me->start_addr, )
+      // free(me);
+    }
+
+    e = e->next;
+  }
+
 }
