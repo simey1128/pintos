@@ -171,8 +171,8 @@ page_fault (struct intr_frame *f)
    // 1. stack grow
    // printf("fault_addr: %p, f->esp: %p\n", fault_addr, f->esp);
    if(fault_addr > PHYS_BASE - 0x800000 
-            && fault_addr < thread_current() -> stack_boundary){
-      uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000 - PGSIZE);
+            && fault_addr <= thread_current() -> stack_boundary){
+      uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
       uint8_t *kpage = palloc_get_page(PAL_USER);
 
       if (kpage == NULL){

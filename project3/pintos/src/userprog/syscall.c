@@ -22,6 +22,9 @@
 #define NOT_REACHED() PANIC ("syscall, frame overflow");
 static bool
 install_page (void *upage, void *kpage, bool writable);
+static int
+get_user (const uint8_t *uaddr);
+static bool check_addr(uint8_t*);
 
 struct file 
   {
@@ -41,6 +44,7 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
+  // printf("here, f->esp: %p, *f->esp: %d\n", f->esp, *(uint8_t *)(f -> esp));
   switch(*(uint8_t *)(f -> esp)){
     case SYS_HALT:
       halt();
@@ -100,44 +104,21 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 }
 
-// void check_addr(void *uaddr){
-//   // 1. user addr인지 check
-//   if(uaddr == NULL || !is_user_vaddr(uaddr)) exit(-1);
+static int
+get_user (const uint8_t *uaddr)
+{
+  if(!is_user_vaddr(uaddr))
+    return -1;
+  int result;
+  asm ("movl $1f, %0; movzbl %1, %0; 1:"
+       : "=&a" (result) : "m" (*uaddr));
+  return result;
+}
 
-//   // 2. stack growth
-//   if(uaddr < thread_current() -> esp){
-//     uint32_t *upage = (uint32_t *)((uint32_t)uaddr & 0xfffff000 - PGSIZE);
-//     uint8_t *kpage = palloc_get_page(PAL_USER);
-//     // printf("upage: %p\n", upage);
-//     // printf("kpage: %p\n", kpage);
+static bool check_addr(uint8_t* uaddr){
+  if(get_user(uaddr) == -1) exit(-1);
+}
 
-//     if (kpage == NULL){
-//       reclaim(upage);
-//       kpage = palloc_get_page(PAL_USER);
-//     }
-
-    
-//     fid_t fid = falloc(kpage, upage);
-//     if(fid == -1)
-//       PANIC("syscall, fid==-1 error");
-
-//     thread_current() -> esp = upage;
-
-//     struct swap_entry* se = get_swap_entry(thread_current()->pagedir, upage);
-
-//     if(se==NULL); // 
-//     else swap_in(kpage, se);
-
-//     if (!install_page (upage, kpage, true)) 
-//     {
-//       palloc_free_page (kpage);
-      
-//       PANIC("syscall, install_page error");
-//     }
-// }
- 
-
-// }
 static bool
 install_page (void *upage, void *kpage, bool writable)
 {
@@ -166,6 +147,7 @@ void exit(int status){
 }
 
 pid_t exec(const char *cmd_line){
+  check_addr(cmd_line);
   return process_execute(cmd_line);
 }
 
@@ -174,6 +156,7 @@ int wait(pid_t pid){
 }
 
 int create(const char* file, unsigned initial_size){
+  check_addr(file);
   if(strlen(file)>128) return 0; // userprog/create-long
   if(strlen(file) == 0) exit(-1); // userprog/create-empty
 
@@ -181,6 +164,7 @@ int create(const char* file, unsigned initial_size){
 }
 
 int remove(const char *file){
+  check_addr(file);
   if(file == NULL){
     exit(-1);
   }
@@ -188,6 +172,7 @@ int remove(const char *file){
 }
 
 int open(const char* file){
+  check_addr(file);
   lock_acquire(&filesys_lock);
   struct file* file_opened = filesys_open(file);
  
@@ -216,6 +201,8 @@ int filesize(int fd){
 }
 
 int read(int fd, void *buffer, unsigned size){
+  check_addr(buffer);
+  check_addr(buffer+size-1);
   if(fd >= 128) return -1;
   int read_value;
   if(fd == 0){
@@ -231,6 +218,8 @@ int read(int fd, void *buffer, unsigned size){
 }
 
 int write(int fd, const void *buffer, unsigned size){
+  check_addr(buffer);
+  check_addr(buffer+size-1);
   if(fd >= 128) return -1;
   int write_value;
   lock_acquire(&filesys_lock);

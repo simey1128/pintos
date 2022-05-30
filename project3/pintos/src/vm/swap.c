@@ -48,6 +48,7 @@ void swap_in(uint32_t* kpage, struct swap_entry *se){
 
     bitmap_reset(swap_bitmap, se->sector/SECTORS);
     list_remove(&se->elem);
+    free(se);
 }
 
 struct swap_entry* get_swap_entry(uint32_t*pd, uint32_t*upage){
