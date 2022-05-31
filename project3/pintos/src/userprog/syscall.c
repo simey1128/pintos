@@ -120,6 +120,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_MMAP:
       f -> eax = mmap(*(uint32_t *)(f -> esp + 16), *(uint32_t *)(f -> esp + 20));
       break;
+      
     case SYS_MUNMAP:
       munmap(*(uint32_t *)(f -> esp + 4));
       break;
@@ -291,6 +292,8 @@ mapid_t mmap(int fd, void *addr){
   if(addr == 0) return -1;
   if(addr > PHYS_BASE - 0x800000) return -1;
   if((uint32_t)addr % PGSIZE != 0) return -1;
+  if(addr < (uint32_t*)0x08048000 + thread_current()->read_bytes) return -1;
+  if(get_me(addr) != NULL) return -1;
 
 
   struct thread *t = thread_current();
