@@ -58,3 +58,37 @@ void spt_free(struct spage_entry** spt, uint32_t *pd){
         i++;
     }
 }
+
+int write_back(uint32_t *pd, struct mmap_entry *me){
+   int write_value = 0;
+   uint32_t *mpage;
+   uint32_t *start_pg = (uint32_t)me->start_addr & 0xfffff000;
+   for(mpage = start_pg; mpage < start_pg + me->file_size + PGSIZE; mpage += PGSIZE){
+      if(pagedir_is_dirty(pd, mpage)){
+         write_value += file_write_at(me->file, mpage, PGSIZE, mpage - start_pg);
+         pagedir_set_dirty(pd, mpage, false);
+      }
+   }
+}
+
+struct spage_entry* get_spte(uint32_t* upage){
+   int i=0;
+   while(i<SPT_MAX){
+      struct spage_entry* spte = thread_current()->spt[i];
+      if(spte->upage == upage) return spte;
+      i++;
+   }
+}
+
+struct mmap_entry* get_me(uint32_t *uaddr){
+   struct list_elem *e = list_begin(&thread_current()->mmap_table);
+   while(e != list_end(&thread_current()->mmap_table)){
+      struct mmap_entry *me = list_entry(e, struct mmap_entry, elem);
+      // int32_t size = me -> file -> inode -> data.length;
+      if (uaddr >= me -> start_addr && uaddr < me->start_addr+me->file_size){
+         return me;
+      }
+      e = list_next(e);
+   }
+   return NULL;
+}

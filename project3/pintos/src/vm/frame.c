@@ -58,6 +58,7 @@ void reclaim(uint32_t *upage){   // upage: demand upage (굴러온돌)
         bool accessed = pagedir_is_accessed(fte->pd, fte->upage);
 
         if(!dirty && !accessed){
+            printf("dirty and accessed");
             pagedir_clear_page(fte->pd, fte->upage);   // fte->upage: reclaim 대상 (박힌돌)
             swap_out(fte);
             break;
@@ -70,7 +71,7 @@ void reclaim(uint32_t *upage){   // upage: demand upage (굴러온돌)
             }
 
             int write_value = file_write_at(me->file, fte->upage, PGSIZE, fte->upage - me->start_addr);
-            pagedir_set_dirty(fte->pd, upage, false);
+            pagedir_set_dirty(fte->pd, fte->upage, false);
         }
 
         // 2. check a accessed_bit

@@ -237,27 +237,6 @@ page_fault (struct intr_frame *f)
 }
 
 
-struct spage_entry* get_spte(uint32_t* upage){
-   int i=0;
-   while(i<SPT_MAX){
-      struct spage_entry* spte = thread_current()->spt[i];
-      if(spte->upage == upage) return spte;
-      i++;
-   }
-}
-
-struct mmap_entry* get_me(uint32_t *uaddr){
-   struct list_elem *e = list_begin(&thread_current()->mmap_table);
-   while(e != list_end(&thread_current()->mmap_table)){
-      struct mmap_entry *me = list_entry(e, struct mmap_entry, elem);
-      // int32_t size = me -> file -> inode -> data.length;
-      if (uaddr >= me -> start_addr && uaddr < me->start_addr+me->file_size){
-         return me;
-      }
-      e = list_next(e);
-   }
-   return NULL;
-}
 
 int
 lazy_load_segment (struct spage_entry* spte){
@@ -300,6 +279,7 @@ lazy_load_segment (struct spage_entry* spte){
 }
 
 int load_mapped_file(struct mmap_entry *me, uint32_t *uaddr){
+   
    uint8_t *kpage = palloc_get_page(PAL_USER);
    uint32_t *upage = (uint32_t)uaddr & 0xfffff000;
    if(kpage == NULL){
@@ -331,17 +311,6 @@ int load_mapped_file(struct mmap_entry *me, uint32_t *uaddr){
    return true;
 }
 
-int write_back(uint32_t *pd, struct mmap_entry *me){
-   int write_value = 0;
-   uint32_t *pg;
-   uint32_t *start_pg = (uint32_t)me->start_addr & 0xfffff000;
-   for(pg = start_pg; pg < start_pg + me->file_size + PGSIZE; pg += PGSIZE){
-      if(pagedir_is_dirty(pd, pg)){
-         write_value += file_write_at(me->file, pg, PGSIZE, pg - start_pg);
-         pagedir_set_dirty(pd, pg, false);
-      }
-   }
-}
 
 static bool
 install_page (void *upage, void *kpage, bool writable)
