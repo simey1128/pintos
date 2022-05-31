@@ -10,7 +10,7 @@ void exception_init (void);
 void exception_print_stats (void);
 
 
-int lazy_load_segment (struct spage_entry*);
-int load_mapped_file(struct mmap_entry *me, uint32_t *uaddr);
+int lazy_load_segment (struct spage_entry*, uint32_t *);
+int load_mapped_file(struct mmap_entry *me, uint32_t *upage, uint32_t *kpage);
 
 #endif /* userprog/exception.h */

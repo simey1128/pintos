@@ -162,152 +162,87 @@ page_fault (struct intr_frame *f)
 //   if(!user) printf("!user\n");
 //   if(is_kernel_vaddr(fault_addr)) printf("is_kernel_vaddr(fault_addr)\n");
 
-   // printf("fault_addr: %p\n", fault_addr);
-
-
+   // 0. user validity
   if(fault_addr==NULL || !user || is_kernel_vaddr(fault_addr)) {
    //   PANIC("exception validty");
      exit(-1);
   }
 
-   // 1. stack grow
-   // printf("fault_addr: %p, f->esp: %p\n", fault_addr, f->esp);
-   if(fault_addr > PHYS_BASE - 0x800000 
-            && fault_addr <= thread_current() -> stack_boundary){
-      if(fault_addr < f->esp) exit(-1);
-      uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
-      uint8_t *kpage = palloc_get_page(PAL_USER);
-
-      if (kpage == NULL){
-         reclaim(upage);
-         kpage = palloc_get_page(PAL_USER);
-      }
-
-      fid_t fid = falloc(kpage, upage);
-      thread_current() -> stack_boundary = upage;
-
-      struct swap_entry* se = get_swap_entry(thread_current()->pagedir, upage);
-
-      if(se==NULL); // 
-      else swap_in(kpage, se);
-
-      if (!install_page (upage, kpage, true)) 
-      {
-      palloc_free_page (kpage);
-      
-      PANIC("syscall, install_page error");
-      }
-      return;
+   // 1-1. check swap_out
+   uint8_t *kpage = palloc_get_page(PAL_USER);
+   uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
+   bool writable = true;
+   if (kpage == NULL){
+      reclaim(upage);
+      kpage = palloc_get_page(PAL_USER);
    }
 
-   // 2. mapped file
+   // 1-2. check swap_in
+   struct swap_entry* se = get_swap_entry(thread_current()->pagedir, upage);
+   if(se!=NULL){
+      swap_in(kpage, se);
+      goto done;
+   }
+
+   // 2-1. check stack segment
+   if(fault_addr > PHYS_BASE - 0x800000 && fault_addr <= thread_current() -> stack_boundary){   
+      if(fault_addr < f->esp)
+         exit(-1);
+      thread_current() -> stack_boundary = upage;
+      goto done;
+   }
+
+   // 2-2. check mmap segment
    struct mmap_entry *me = get_me(fault_addr);
    if(me != NULL){
-      int tmp = load_mapped_file(me, fault_addr);
-      if(tmp == -1)
+      if(!load_mapped_file(me, upage, kpage))
          exit(-1);
-      return;
+      goto done;
    }
-   
-   // 3. spte에 존재하는 경우
-   struct thread *t = thread_current();
+
+   // 2-3. lazy load segment
    struct spage_entry* spte = get_spte((uint32_t)fault_addr&0xfffff000);
-   if(spte == NULL) {
-      // PANIC("spte error");
-      exit(-1);
+   if(spte != NULL){
+      if(!lazy_load_segment(spte, kpage))
+         exit(-1);
+      upage = spte->upage;
+      writable = spte->writable;
+      goto done;
    }
+   PANIC("NOT REACHED, page_fault");
 
-   //4. load spte
-   if(!lazy_load_segment(spte)) {
-      // PANIC("lazy_load_segment error");
+done:
+   if(falloc(kpage, upage) == -1)
       exit(-1);
+   if(!install_page(upage, kpage, writable)){
+      palloc_free_page(kpage);
+      // exit(-1);
+      PANIC("install_page error");
    }
-
-   //3. page tabel entry update(valid bit)
-   pagedir_set_present(thread_current()->pagedir, fault_addr, true);
-
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-//   printf ("Page fault at %p: %s error %s page in %s context.\n",
-//           fault_addr,
-//           not_present ? "not present" : "rights violation",
-//           write ? "writing" : "reading",
-//           user ? "user" : "kernel");
-//   kill (f);
 }
 
 
 
 int
-lazy_load_segment (struct spage_entry* spte){
-   // printf("spte->read_bytes: %d\n", spte->read_bytes);
-   // printf("spte->zero_bytes: %d\n", spte->zero_bytes);
-   // printf("writable: %d\n", spte->writable);
+lazy_load_segment (struct spage_entry* spte, uint32_t *kpage){
    file_seek (spte->file, spte->ofs);  
-
-   uint32_t *kpage = palloc_get_page (PAL_USER);
-   if (kpage == NULL){
-      reclaim(spte->upage);
-      kpage = palloc_get_page(PAL_USER);
+   if (file_read (spte->file, kpage, spte->read_bytes) != (int) spte->read_bytes)
+   {
+      palloc_free_page (kpage);
+      return false; 
    }
-
-   fid_t fid = falloc(kpage, spte->upage);
-   if(fid == -1)
-      return false;  
-
-   struct swap_entry* se = get_swap_entry(thread_current()->pagedir, spte->upage);
-
-   if(se == NULL){ // page is not swapped out
-      if (file_read (spte->file, kpage, spte->read_bytes) != (int) spte->read_bytes)
-      {
-         palloc_free_page (kpage);
-         return false; 
-      }
-      memset (kpage + spte->read_bytes, 0, spte->zero_bytes);
-   }
-
-   else swap_in(kpage, se);
-   
-
-   if (!install_page (spte->upage, kpage, spte->writable)) 
-        {
-          palloc_free_page (kpage);
-          return false;
-        }
+   memset (kpage + spte->read_bytes, 0, spte->zero_bytes);
 
    return true;
 }
 
-int load_mapped_file(struct mmap_entry *me, uint32_t *uaddr){
-   
-   uint8_t *kpage = palloc_get_page(PAL_USER);
-   uint32_t *upage = (uint32_t)uaddr & 0xfffff000;
-   if(kpage == NULL){
-      reclaim(upage);
-      kpage = palloc_get_page(PAL_USER);
-   }
-
-   fid_t fid = falloc(kpage, upage);
-   if(fid == -1)
-      return false;  
-
-   struct swap_entry* se = get_swap_entry(thread_current()->pagedir, upage);
-
-   if(se == NULL){ // page is not swapped out
-      int read_bytes = file_read_at(me -> file, (void *)kpage, PGSIZE, upage - me->start_addr);
-      if (read_bytes > PGSIZE){
-         palloc_free_page (kpage);
-         return false;
-      }
-      memset (kpage + read_bytes, 0, PGSIZE - read_bytes);
-   } else swap_in(kpage, se);
-   
-
-   if (!install_page (upage, kpage, true)) {
+int load_mapped_file(struct mmap_entry *me, uint32_t *upage, uint32_t *kpage){
+   int read_bytes = file_read_at(me -> file, (void *)kpage, PGSIZE, upage - me->start_addr);
+   if (read_bytes > PGSIZE){
       palloc_free_page (kpage);
       return false;
    }
+   memset (kpage + read_bytes, 0, PGSIZE - read_bytes);
 
    return true;
 }

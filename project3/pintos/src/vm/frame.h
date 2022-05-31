@@ -32,6 +32,6 @@ void ffree(uint32_t *);
 
 bool cmp_fid(const struct list_elem *, const struct list_elem *, void *);
 
-void reclaim(uint32_t *);
+void reclaim();
 
 #endif
