@@ -295,7 +295,7 @@ mapid_t mmap(int fd, void *addr){
   struct thread *t = thread_current();
   struct mmap_entry *me = malloc(sizeof(*me));
   me -> mapid = fd;
-  me -> file = t -> fd_list[fd];
+  me -> file = file_reopen(t -> fd_list[fd]);
   me -> file_size = me -> file -> inode -> data.length;
   me -> start_addr = addr;
 
