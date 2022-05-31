@@ -114,7 +114,7 @@ struct thread
    unsigned magic;                     /* Detects stack overflow. */
 
    struct file *current_file;
-   struct spage_entry* spt[SPT_MAX];
+   struct list spage_table;
    void* stack_boundary;
    uint32_t read_bytes;
   };

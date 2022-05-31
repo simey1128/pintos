@@ -11,7 +11,7 @@
 
 
 void
-spte_create(struct file *file, off_t ofs, void* upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable, struct spage_entry **spt){
+spte_create(struct file *file, off_t ofs, void* upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable){
     ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
     ASSERT (pg_ofs (upage) == 0);
     ASSERT (ofs % PGSIZE == 0);
@@ -27,7 +27,7 @@ spte_create(struct file *file, off_t ofs, void* upage, uint32_t read_bytes, uint
         spte -> zero_bytes = page_zero_bytes;
         spte -> writable = writable;
 
-        spte_insert(spte, spt);
+        list_push_back(&thread_current()->spage_table, &spte->elem);
         /* Advance. */
         read_bytes -= page_read_bytes;
         zero_bytes -= page_zero_bytes;
@@ -35,27 +35,17 @@ spte_create(struct file *file, off_t ofs, void* upage, uint32_t read_bytes, uint
         upage += PGSIZE;
     }
 }
-void spte_insert(struct spage_entry* spte, struct spage_entry **spt){
-    int i=0;
-    while(i<SPT_MAX){
-        if(spt[i] == NULL){
-            spt[i] = spte;
-            return;
-        }
-        i++;
-    }
-    // NOT_REACHED ();
-}
 
-void spt_free(struct spage_entry** spt, uint32_t *pd){
-    int i=0;
-    while(i<SPT_MAX){
-        if(spt[i] != NULL){
-            pagedir_clear_page(pd, spt[i]->upage);
-            free(spt[i]);
-            spt[i] = NULL;
-        }
-        i++;
+void spt_free(){
+    uint32_t *pd = thread_current()->pagedir;
+    struct list_elem *e = list_begin(&thread_current()->spage_table);
+    while(e != list_end(&thread_current()->spage_table)){
+        struct spage_entry *spte = list_entry(e, struct spage_entry, elem);
+        pagedir_clear_page(pd, spte->upage);
+        list_remove(&spte);
+        // free(spte);
+
+        e = list_next(e);
     }
 }
 
@@ -72,12 +62,14 @@ int write_back(uint32_t *pd, struct mmap_entry *me){
 }
 
 struct spage_entry* get_spte(uint32_t* upage){
-   int i=0;
-   while(i<SPT_MAX){
-      struct spage_entry* spte = thread_current()->spt[i];
-      if(spte->upage == upage) return spte;
-      i++;
-   }
+   struct list_elem *e = list_begin(&thread_current()->spage_table);
+    while(e != list_end(&thread_current()->spage_table)){
+        struct spage_entry *spte = list_entry(e, struct spage_entry, elem);
+        if(spte->upage == upage)
+            return spte;
+        e = list_next(e);
+    }
+    return NULL;
 }
 
 struct mmap_entry* get_me(uint32_t *uaddr){

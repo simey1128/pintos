@@ -218,11 +218,6 @@ thread_create (const char *name, int priority,
     fd_list[i] = NULL;
   }
 
-  struct spage_entry** spt = t->spt;
-  for(i=0; i<SPT_MAX; i++){
-    spt[i] = NULL;
-  }
-
   intr_set_level (old_level);
 
   /* Add to run queue. */
@@ -500,6 +495,7 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&(t->child_list));
   list_push_back(&(running_thread()->child_list), &(t->childelem));
 #endif
+  list_init(&(t->spage_table));
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

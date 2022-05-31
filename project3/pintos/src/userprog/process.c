@@ -215,7 +215,7 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
-      spt_free(&cur->spt, pd);
+      spt_free();
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
@@ -402,7 +402,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
                 thread_current()->read_bytes = read_bytes;
-              spte_create(file, file_page, (void *)mem_page, read_bytes, zero_bytes, writable, t->spt);
+              spte_create(file, file_page, (void *)mem_page, read_bytes, zero_bytes, writable);
             }
           else
             goto done;
