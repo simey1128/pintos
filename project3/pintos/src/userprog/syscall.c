@@ -303,6 +303,8 @@ mapid_t mmap(int fd, void *addr){
   me -> file_size = me -> file -> inode -> data.length;
   me -> start_addr = addr;
 
+  if(me -> file_size == 0) exit(-1);
+
   list_push_back(&t->mmap_table, &me->elem);
 
   return me->mapid;
@@ -312,7 +314,9 @@ void munmap(mapid_t mapid){
   while(e!=list_end(&thread_current()->mmap_table)){
     struct mmap_entry* me = list_entry(e, struct mmap_entry, elem);
     if(me->mapid == mapid){
+      lock_acquire(&filesys_lock);
       write_back(thread_current()->pagedir, me);
+      lock_release(&filesys_lock);
       list_remove(&me->elem);
       // file_write(me->file, me->start_addr, )
       // free(me);

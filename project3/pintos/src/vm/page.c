@@ -56,7 +56,8 @@ int write_back(uint32_t *pd, struct mmap_entry *me){
    for(mpage = start_pg; mpage < start_pg + me->file_size + PGSIZE; mpage += PGSIZE){
       if(pagedir_is_dirty(pd, mpage)){
          write_value += file_write_at(me->file, mpage, PGSIZE, mpage - start_pg);
-         pagedir_set_dirty(pd, mpage, false);
+         pagedir_clear_page(pd, mpage);
+        //  pagedir_set_dirty(pd, mpage, false);
       }
    }
 }

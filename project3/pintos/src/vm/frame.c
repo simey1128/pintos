@@ -52,7 +52,7 @@ bool cmp_fid(const struct list_elem *_l, const struct list_elem *_s, void *aux){
 
 void reclaim(){
     struct list_elem *e = list_begin(&frame_table);
-    while(e != list_end(&frame_table)){
+    while(1){
         struct frame_entry *fte = list_entry(e, struct frame_entry, elem);
         bool dirty = pagedir_is_dirty(fte->pd, fte->upage);
         bool accessed = pagedir_is_accessed(fte->pd, fte->upage);
@@ -65,10 +65,10 @@ void reclaim(){
 
         if(dirty){   // need to write back
             struct mmap_entry *me = get_me(fte->upage);
-            if(me == NULL)
-                PANIC("NOT_REACHED");
-            // write back
-            int write_value = file_write_at(me->file, fte->upage, PGSIZE, fte->upage - me->start_addr);
+            if(me != NULL){
+                // write back
+                int write_value = file_write_at(me->file, fte->upage, PGSIZE, fte->upage - me->start_addr);
+            }
             pagedir_set_dirty(fte->pd, fte->upage, false);
         }
 

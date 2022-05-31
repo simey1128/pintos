@@ -3,6 +3,7 @@
 #include "vm/swap.h"
 #include "threads/vaddr.h"
 
+#include <stdio.h>
 #include "kernel/bitmap.h"
 #include "lib/string.h"
 #include "debug.h"
@@ -12,17 +13,22 @@
 
 void swap_init(){
     swap_disk = block_get_role(BLOCK_SWAP);
-
-    // size_t bm_pages = DIV_ROUND_UP (bitmap_buf_size (1024), PGSIZE);
-    swap_bitmap = bitmap_create(block_size(swap_disk)/SECTORS);
+    if(swap_disk == NULL){
+        // printf("NULL!\n");
+        swap_bitmap = bitmap_create(0);
+    } else{
+        // printf("good!\n");
+        swap_bitmap = bitmap_create(block_size(swap_disk) / SECTORS);
+    }
+    ASSERT(swap_bitmap != NULL);
 
     list_init(&swap_table);
 }
 
 void swap_out(struct frame_entry *fte){
-    if(bitmap_all(swap_bitmap, 0, 1024)){
-        PANIC("bitmap out");
-    }
+    // if(bitmap_all(swap_bitmap, 0, 1024)){
+    //     PANIC("bitmap out");
+    // }
     //swap table entry 만들기
     struct swap_entry* se = malloc(sizeof *se);
     se->pd = fte->pd;

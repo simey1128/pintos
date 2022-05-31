@@ -45,6 +45,8 @@
         "type_traits": "c",
         "utility": "c",
         "typeinfo": "c",
-        "filesys.h": "c"
+        "filesys.h": "c",
+        "block.h": "c",
+        "bitmap.h": "c"
     }
 }
