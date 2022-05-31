@@ -174,6 +174,7 @@ page_fault (struct intr_frame *f)
    // printf("fault_addr: %p, f->esp: %p\n", fault_addr, f->esp);
    if(fault_addr > PHYS_BASE - 0x800000 
             && fault_addr <= thread_current() -> stack_boundary){
+      if(fault_addr < f->esp) exit(-1);
       uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
       uint8_t *kpage = palloc_get_page(PAL_USER);
 

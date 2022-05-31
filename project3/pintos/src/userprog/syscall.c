@@ -62,7 +62,7 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  // printf("here, f->esp: %p, *f->esp: %d\n", f->esp, *(uint8_t *)(f -> esp));
+  if((f -> esp)>=PHYS_BASE-4) exit(-1);
   switch(*(uint8_t *)(f -> esp)){
     case SYS_HALT:
       halt();
