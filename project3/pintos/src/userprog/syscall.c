@@ -290,6 +290,7 @@ void close(int fd){
 mapid_t mmap(int fd, void *addr){
   if(addr == 0) return -1;
   if(addr > PHYS_BASE - 0x800000) return -1;
+  if((uint32_t)addr % PGSIZE != 0) return -1;
 
 
   struct thread *t = thread_current();
