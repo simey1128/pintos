@@ -13,6 +13,8 @@
 #include "threads/palloc.h"
 #include "debug.h"
 #include "userprog/pagedir.h"
+#include "filesys/inode.h"
+#include "userprog/exception.h"
 
 #include "vm/frame.h"
 #include "vm/page.h"
@@ -25,12 +27,28 @@ install_page (void *upage, void *kpage, bool writable);
 static int
 get_user (const uint8_t *uaddr);
 static bool check_addr(uint8_t*);
-
+struct inode_disk
+  {
+    block_sector_t start;               /* First data sector. */
+    off_t length;                       /* File size in bytes. */
+    unsigned magic;                     /* Magic number. */
+    uint32_t unused[125];               /* Not used. */
+  };
 struct file 
   {
     struct inode *inode;        /* File's inode. */
     off_t pos;                  /* Current position. */
     bool deny_write;            /* Has file_deny_write() been called? */
+  };
+
+struct inode 
+  {
+    struct list_elem elem;              /* Element in inode list. */
+    block_sector_t sector;              /* Sector number of disk location. */
+    int open_cnt;                       /* Number of openers. */
+    bool removed;                       /* True if deleted, false otherwise. */
+    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
+    struct inode_disk data;             /* Inode content. */
   };
 static void syscall_handler (struct intr_frame *);
 
@@ -153,9 +171,7 @@ void exit(int status){
     }
 
   }
-
   
-
   thread_exit();
 }
 
@@ -276,7 +292,7 @@ mapid_t mmap(int fd, void *addr){
   struct mmap_entry *me = malloc(sizeof(*me));
   me -> mapid = fd;
   me -> file = t -> fd_list[fd];
-  // me -> mapped_pages = 
+  me -> file_size = me -> file -> inode -> data.length;
   me -> start_addr = addr;
 
   list_push_back(&t->mmap_table, &me->elem);
@@ -288,7 +304,7 @@ void munmap(mapid_t mapid){
   while(e!=list_end(&thread_current()->mmap_table)){
     struct mmap_entry* me = list_entry(e, struct mmap_entry, elem);
     if(me->mapid == mapid){
-      
+      write_back(thread_current()->pagedir, me);
       list_remove(&me->elem);
       // file_write(me->file, me->start_addr, )
       // free(me);

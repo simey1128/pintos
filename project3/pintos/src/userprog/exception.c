@@ -9,32 +9,9 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include "threads/pte.h"
 
 #include "threads/palloc.h"
-/* Number of page faults processed. */
-struct inode_disk
-  {
-    block_sector_t start;               /* First data sector. */
-    off_t length;                       /* File size in bytes. */
-    unsigned magic;                     /* Magic number. */
-    uint32_t unused[125];               /* Not used. */
-  };
-struct file 
-  {
-    struct inode *inode;        /* File's inode. */
-    off_t pos;                  /* Current position. */
-    bool deny_write;            /* Has file_deny_write() been called? */
-  };
-
-struct inode 
-  {
-    struct list_elem elem;              /* Element in inode list. */
-    block_sector_t sector;              /* Sector number of disk location. */
-    int open_cnt;                       /* Number of openers. */
-    bool removed;                       /* True if deleted, false otherwise. */
-    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-    struct inode_disk data;             /* Inode content. */
-  };
 
 
 static long long page_fault_cnt;
@@ -273,8 +250,8 @@ struct mmap_entry* get_me(uint32_t *uaddr){
    struct list_elem *e = list_begin(&thread_current()->mmap_table);
    while(e != list_end(&thread_current()->mmap_table)){
       struct mmap_entry *me = list_entry(e, struct mmap_entry, elem);
-      int32_t size = me -> file -> inode -> data.length;
-      if (uaddr >= me -> start_addr && uaddr < me->start_addr+size){
+      // int32_t size = me -> file -> inode -> data.length;
+      if (uaddr >= me -> start_addr && uaddr < me->start_addr+me->file_size){
          return me;
       }
       e = list_next(e);
@@ -337,7 +314,7 @@ int load_mapped_file(struct mmap_entry *me, uint32_t *uaddr){
    struct swap_entry* se = get_swap_entry(thread_current()->pagedir, upage);
 
    if(se == NULL){ // page is not swapped out
-      int read_bytes = file_read(me -> file, (void *)kpage, PGSIZE);
+      int read_bytes = file_read_at(me -> file, (void *)kpage, PGSIZE, upage - me->start_addr);
       if (read_bytes > PGSIZE){
          palloc_free_page (kpage);
          return false;
@@ -352,6 +329,18 @@ int load_mapped_file(struct mmap_entry *me, uint32_t *uaddr){
    }
 
    return true;
+}
+
+int write_back(uint32_t *pd, struct mmap_entry *me){
+   int write_value = 0;
+   uint32_t *pg;
+   uint32_t *start_pg = (uint32_t)me->start_addr & 0xfffff000;
+   for(pg = start_pg; pg < start_pg + me->file_size + PGSIZE; pg += PGSIZE){
+      if(pagedir_is_dirty(pd, pg)){
+         write_value += file_write_at(me->file, pg, PGSIZE, pg - start_pg);
+         pagedir_set_dirty(pd, pg, false);
+      }
+   }
 }
 
 static bool

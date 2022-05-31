@@ -64,8 +64,13 @@ void reclaim(uint32_t *upage){   // upage: demand upage (굴러온돌)
         }
         // 1. check a dirty_bit
         if(dirty){
-            //write back
-            // fte->dirty = 0;
+            struct mmap_entry *me = get_me(fte->upage);
+            if(me == NULL){
+                PANIC("swap writeback");
+            }
+
+            int write_value = file_write_at(me->file, fte->upage, PGSIZE, fte->upage - me->start_addr);
+            pagedir_set_dirty(fte->pd, upage, false);
         }
 
         // 2. check a accessed_bit

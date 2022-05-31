@@ -13,4 +13,5 @@ struct spage_entry* get_spte(uint32_t* uaddr);
 struct mmap_entry *get_me(uint32_t* uaddr);
 int lazy_load_segment (struct spage_entry*);
 int load_mapped_file(struct mmap_entry *me, uint32_t *uaddr);
+int write_back(uint32_t *pd, struct mmap_entry *me);
 #endif /* userprog/exception.h */

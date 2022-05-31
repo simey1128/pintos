@@ -18,7 +18,7 @@ struct spage_entry{
 struct mmap_entry{
     mapid_t mapid;
     struct file *file;
-    struct list mapped_pages;
+    int file_size;
     uint32_t *start_addr;
 
     struct list_elem elem;
