@@ -93,7 +93,10 @@ start_process (void *cmd_)
 
   tkn = strtok_r(cmd, " ", &next_tkn);
   for(argc = 0; tkn != NULL; argc++){
-    if(argc>=128) exit(-1);   // TODO
+    if(argc>=128){
+      printf("argc >= 128\n");
+      exit(-1);
+    }
     argv[argc] = tkn;
     tkn = strtok_r(NULL, " ", &next_tkn);
   }
@@ -115,6 +118,7 @@ start_process (void *cmd_)
   sema_up(&thread_current()->parent->sema_load);
   if (!success) {
     thread_current() -> not_loaded = 1;
+    printf("fail to load\n");
     exit(-1);
   }
 

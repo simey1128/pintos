@@ -63,7 +63,6 @@ static const char *swap_bdev_name;
 static size_t user_page_limit = SIZE_MAX;
 
 static void bss_init (void);
-static void frame_init(void);
 static void paging_init (void);
 
 static char **read_command_line (void);
@@ -103,8 +102,10 @@ main (void)
   /* Initialize memory system. */
   palloc_init (user_page_limit);
   malloc_init ();
-  frame_init();
   paging_init ();
+#ifdef VM
+  list_init(&frame_table);
+#endif
 
   /* Segmentation. */
 #ifdef USERPROG
@@ -133,6 +134,9 @@ main (void)
   locate_block_devices ();
   filesys_init (format_filesys);
 #endif
+#ifdef VM
+  swap_init();
+#endif
 
   printf ("Boot complete.\n");
   
@@ -155,14 +159,6 @@ bss_init (void)
 {
   extern char _start_bss, _end_bss;
   memset (&_start_bss, 0, &_end_bss - &_start_bss);
-}
-
-static void
-frame_init(void){
-  // ASSERT   # intr handling?
-  list_init(&frame_table);
-  swap_init();
-  fid_next = 1;
 }
 
 /* Populates the base page directory and page table with the

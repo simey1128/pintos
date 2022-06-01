@@ -7,6 +7,8 @@
 
 #include "debug.h"
 
+#include "threads/palloc.h"
+
 
 #define NOT_REACHED() PANIC ("frame, frame overflow");
 
@@ -48,34 +50,4 @@ bool cmp_fid(const struct list_elem *_l, const struct list_elem *_s, void *aux){
   const struct frame_entry *l = list_entry(_l, struct frame_entry, elem);
   const struct frame_entry *s = list_entry(_s, struct frame_entry, elem);
   return (l -> fid) < (s -> fid);
-}
-
-void reclaim(){
-    struct list_elem *e = list_begin(&frame_table);
-    while(1){
-        struct frame_entry *fte = list_entry(e, struct frame_entry, elem);
-        bool dirty = pagedir_is_dirty(fte->pd, fte->upage);
-        bool accessed = pagedir_is_accessed(fte->pd, fte->upage);
-
-        if(!dirty && !accessed){   // need to reclaim
-            swap_out(fte);
-            pagedir_clear_page(fte->pd, fte->upage);   // fte->upage: reclaim 대상 (박힌돌)
-            break;
-        }
-
-        if(dirty){   // need to write back
-            struct mmap_entry *me = get_me(fte->upage);
-            if(me != NULL){
-                // write back
-                int write_value = file_write_at(me->file, fte->upage, PGSIZE, fte->upage - me->start_addr);
-            }
-            pagedir_set_dirty(fte->pd, fte->upage, false);
-        }
-
-        if(accessed){   // need to clear accessed bit
-            pagedir_set_accessed(fte->pd,fte->upage, false);
-        }
-        e = list_next(e);
-    }
-    PANIC("NOT_REACHED, reclaim");
 }

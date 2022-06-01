@@ -62,6 +62,7 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
+  // printf("syscall num.: %d\n", *(uint8_t *)(f -> esp));
   if((f -> esp)>=PHYS_BASE-4) exit(-1);
   switch(*(uint8_t *)(f -> esp)){
     case SYS_HALT:
@@ -318,7 +319,6 @@ void munmap(mapid_t mapid){
       write_back(thread_current()->pagedir, me);
       lock_release(&filesys_lock);
       list_remove(&me->elem);
-      // file_write(me->file, me->start_addr, )
       // free(me);
     }
 

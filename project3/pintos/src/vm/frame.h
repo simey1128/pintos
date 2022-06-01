@@ -11,8 +11,6 @@
 typedef uint32_t fid_t;
 typedef bool bit;
 
-fid_t fid_next;
-
 struct frame_entry{
     fid_t fid;
     uint32_t *pd;
@@ -31,7 +29,5 @@ fid_t falloc(uint32_t *, uint32_t *);
 void ffree(uint32_t *);
 
 bool cmp_fid(const struct list_elem *, const struct list_elem *, void *);
-
-void reclaim();
 
 #endif

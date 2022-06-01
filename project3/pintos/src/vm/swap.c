@@ -13,13 +13,8 @@
 
 void swap_init(){
     swap_disk = block_get_role(BLOCK_SWAP);
-    if(swap_disk == NULL){
-        // printf("NULL!\n");
-        swap_bitmap = bitmap_create(0);
-    } else{
-        // printf("good!\n");
-        swap_bitmap = bitmap_create(block_size(swap_disk) / SECTORS);
-    }
+    swap_bitmap = bitmap_create(block_size(swap_disk) / SECTORS);
+    bitmap_set_all(swap_bitmap, true);
     ASSERT(swap_bitmap != NULL);
 
     list_init(&swap_table);
@@ -30,19 +25,19 @@ void swap_out(struct frame_entry *fte){
     //     PANIC("bitmap out");
     // }
     //swap table entry 만들기
+    size_t idx = bitmap_scan(swap_bitmap, 0, 1, true);
     struct swap_entry* se = malloc(sizeof *se);
     se->pd = fte->pd;
     se->upage = fte->upage;
-    se->sector = bitmap_scan_and_flip(swap_bitmap, 0, 1, false) * SECTORS;
-
-    list_push_back(&swap_table, &se);
+    se->sector = idx * SECTORS;
 
     //disk 쓰기
     int i;
     for(i=0; i<SECTORS; i++){
-        block_write(swap_disk, se->sector+i, fte->kpage + i * BLOCK_SECTOR_SIZE);
+        block_write(swap_disk, se->sector+i, se->upage + i * BLOCK_SECTOR_SIZE);
     }
-
+    list_push_back(&swap_table, &se);
+    bitmap_set(swap_bitmap, idx, false);
 }
 
 void swap_in(uint32_t* kpage, struct swap_entry *se){

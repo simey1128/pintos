@@ -158,7 +158,8 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-   // printf("fault_addr: %p\n", fault_addr);
+/* FOR DEBUGING!!! */
+//   printf("fault_addr: %p\n", fault_addr);
 //   if(fault_addr==NULL) printf("fault_addr==NULL\n");
 //   if(!user) printf("!user\n");
 //   if(is_kernel_vaddr(fault_addr)) printf("is_kernel_vaddr(fault_addr)\n");
@@ -166,6 +167,7 @@ page_fault (struct intr_frame *f)
    // 0. user validity
   if(fault_addr==NULL || !user || is_kernel_vaddr(fault_addr)) {
    //   PANIC("exception validty");
+      // printf("user validity\n");
      exit(-1);
   }
 
@@ -174,8 +176,10 @@ page_fault (struct intr_frame *f)
    uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
    bool writable = true;
    if (kpage == NULL){
+      // printf("need to swap out\n");
       reclaim(upage);
       kpage = palloc_get_page(PAL_USER);
+      // printf("kpage: %p\n", kpage);
    }
 
    // 1-2. check swap_in
@@ -189,8 +193,10 @@ page_fault (struct intr_frame *f)
    // 2-1. check stack segment
    if(fault_addr > PHYS_BASE - 0x800000 && fault_addr <= thread_current() -> stack_boundary){
       // printf("Not a stack, fault_addr: %p\n", fault_addr);
-      if(fault_addr < f->esp)
+      if(fault_addr < f->esp){
+         // printf("2-1\n");
          exit(-1);
+      }
       thread_current() -> stack_boundary = upage;
       goto done;
    }
@@ -199,8 +205,10 @@ page_fault (struct intr_frame *f)
    struct mmap_entry *me = get_me(fault_addr);
    if(me != NULL){
       // printf("me != NULL, fault_addr: %p\n", fault_addr);
-      if(!load_mapped_file(me, upage, kpage))
+      if(!load_mapped_file(me, upage, kpage)){
+         // printf("2-2\n");
          exit(-1);
+      }
       goto done;
    }
 
@@ -208,18 +216,23 @@ page_fault (struct intr_frame *f)
    struct spage_entry* spte = get_spte(upage);
    if(spte != NULL){
       // printf("spte != NULL, fault_addr: %p\n", fault_addr);
-      if(!lazy_load_segment(spte, kpage))
+      if(!lazy_load_segment(spte, kpage)){
+         // printf("2-3\n");
          exit(-1);
+      }
       upage = spte->upage;
       writable = spte->writable;
       goto done;
    }
    // PANIC("NOT REACHED, page_fault");
+   // printf("NOT_REACHED\n");
    exit(-1);
 
 done:
-   if(falloc(kpage, upage) == -1)
+   if(falloc(kpage, upage) == -1){
+      // printf("falloc\n");
       exit(-1);
+   }
    if(!install_page(upage, kpage, writable)){
       palloc_free_page(kpage);
       // exit(-1);
@@ -265,4 +278,39 @@ install_page (void *upage, void *kpage, bool writable)
    //    printf("Fail of pagedir_set_page\n");
   return (pagedir_get_page (thread_current()->pagedir, upage) == NULL
           && pagedir_set_page (thread_current()->pagedir, upage, kpage, writable));
+}
+
+void reclaim(){
+    struct list_elem *e = list_begin(&frame_table);
+    while(1){
+        struct frame_entry *fte = list_entry(e, struct frame_entry, elem);
+        bool dirty = pagedir_is_dirty(fte->pd, fte->upage);
+        bool accessed = pagedir_is_accessed(fte->pd, fte->upage);
+
+        if(!dirty && !accessed){   // need to reclaim
+            swap_out(fte);
+            pagedir_clear_page(fte->pd, fte->upage);   // fte->upage: reclaim 대상 (박힌돌)
+            list_remove(&fte->elem);
+            free(&fte->kpage);
+            break;
+        }
+
+        if(dirty){   // need to write back
+            struct mmap_entry *me = get_me(fte->upage);
+            if(me != NULL){
+                // write back
+                int write_value = file_write_at(me->file, fte->upage, PGSIZE, fte->upage - me->start_addr);
+            }
+            pagedir_set_dirty(fte->pd, fte->upage, false);
+        }
+
+        if(accessed){   // need to clear accessed bit
+            pagedir_set_accessed(fte->pd,fte->upage, false);
+        }
+        e = list_next(e);
+
+        if(e == list_end(&frame_table))
+            e = list_begin(&frame_table);
+    }
+    // PANIC("NOT_REACHED, reclaim");
 }
