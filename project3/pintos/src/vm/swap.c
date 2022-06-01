@@ -2,6 +2,8 @@
 #include "vm/page.h"
 #include "vm/swap.h"
 #include "threads/vaddr.h"
+#include "threads/thread.h"
+#include "threads/palloc.h"
 
 #include <stdio.h>
 #include "kernel/bitmap.h"
@@ -47,7 +49,7 @@ void swap_out(struct frame_entry *fte){
 }
 
 void swap_in(uint32_t* kpage, struct swap_entry *se){
-    // lock_acquire(&swap_lock);
+    lock_acquire(&swap_lock);
 
     int i;
     for(i=0; i<SECTORS; i++){
@@ -58,7 +60,7 @@ void swap_in(uint32_t* kpage, struct swap_entry *se){
     // bitmap_reset(swap_bitmap, se->sector/SECTORS);
     list_remove(&se->elem);
     free(se);
-    // lock_release(&swap_lock);
+    lock_release(&swap_lock);
 }
 
 struct swap_entry* get_swap_entry(uint32_t*pd, uint32_t*upage){
@@ -82,7 +84,11 @@ void reclaim(){
         bool accessed = pagedir_is_accessed(fte->pd, fte->upage);
 
         if(!dirty && !accessed){   // need to reclaim
+            uint32_t *tmp = palloc_get_page(PAL_USER);
+            printf("BEFORE kpage: %p, tid: %d\n", tmp, thread_current()->tid);
             swap_out(fte);
+            // tmp = palloc_get_page(PAL_USER);
+            // printf("AFTER kpage: %p\n", tmp);
             return;
         }
 

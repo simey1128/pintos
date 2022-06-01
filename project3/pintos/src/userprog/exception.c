@@ -181,18 +181,17 @@ page_fault (struct intr_frame *f)
    uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
    bool writable = true;
    if (kpage == NULL){
-      // printf(">>> need to swap out\n");
       lock_acquire(&swap_lock);
       reclaim();
       kpage = palloc_get_page(PAL_USER);
+      printf("AFTER kpage: %p, tid: %d\n\n", kpage, thread_current()->tid);
       lock_release(&swap_lock);
-      // printf(">>> swap out success, fault_addr: %p\n", fault_addr);
    }
 
    // 1-2. check swap_in
    struct swap_entry* se = get_swap_entry(thread_current()->pagedir, upage);
    if(se!=NULL){
-      // printf(">>> 1-2\n");
+      printf(">>> 1-2\n");
       swap_in(kpage, se);
       goto done;
    }
@@ -200,6 +199,7 @@ page_fault (struct intr_frame *f)
    // 2-2. check mmap segment
    struct mmap_entry *me = get_me(fault_addr);
    if(me != NULL){
+      printf(">>> 2-2\n");
       if(!load_mapped_file(me, upage, kpage)){
          // printf(">>> exit(-1) in 2-2\n");
          exit(-1);
@@ -210,6 +210,7 @@ page_fault (struct intr_frame *f)
    // 2-3. lazy load segment
    struct spage_entry* spte = get_spte(upage);
    if(spte != NULL){
+      // printf(">>> 2-3\n");
       if(!lazy_load_segment(spte, kpage)){
          // printf(">>> exit(-1) in 2-3\n");
          exit(-1);
@@ -223,6 +224,7 @@ page_fault (struct intr_frame *f)
 
 done:
    if(falloc(kpage, upage) == -1){
+      printf("exit(-1) in falloc\n");
       exit(-1);
    }
    if(!install_page(upage, kpage, writable)){
@@ -236,7 +238,7 @@ done:
 
 int
 lazy_load_segment (struct spage_entry* spte, uint32_t *kpage){
-   file_seek (spte->file, spte->ofs);  
+   file_seek (spte->file, spte->ofs);
    if (file_read (spte->file, kpage, spte->read_bytes) != (int) spte->read_bytes)
    {
       palloc_free_page (kpage);
@@ -273,7 +275,9 @@ void load_stack_segment(uint32_t* fault_addr, void* f_esp){
          if(kpage == NULL){
             lock_acquire(&swap_lock);
             reclaim();
+            printf("end reclaim\n");
             kpage = palloc_get_page(PAL_USER);
+            printf("AFTER kpage: %p\n", kpage);
             lock_release(&swap_lock);
          }
 
