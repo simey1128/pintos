@@ -56,7 +56,7 @@ void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-  lock_init(&filesys_lock);
+  lock_init(&disk_lock);
 }
 
 static void
@@ -203,11 +203,11 @@ int remove(const char *file){
 
 int open(const char* file){
   check_addr(file);
-  lock_acquire(&filesys_lock);
+  lock_acquire(&disk_lock);
   struct file* file_opened = filesys_open(file);
  
   if(file_opened == NULL) {
-    lock_release(&filesys_lock);
+    lock_release(&disk_lock);
     return -1;
   }
   
@@ -219,7 +219,7 @@ int open(const char* file){
         break;
       }   
     }   
-  lock_release(&filesys_lock);
+  lock_release(&disk_lock);
   return fd;
 }
 
@@ -239,9 +239,9 @@ int read(int fd, void *buffer, unsigned size){
     *(char *)buffer = input_getc();
     read_value = size;
   }else if(fd > 2){
-    lock_acquire(&filesys_lock);
+    lock_acquire(&disk_lock);
     read_value = file_read(thread_current() -> fd_list[fd], buffer, size);
-    lock_release(&filesys_lock);
+    lock_release(&disk_lock);
   }else
     read_value = -1;
   return read_value;
@@ -252,7 +252,7 @@ int write(int fd, const void *buffer, unsigned size){
   check_addr(buffer+size-1);
   if(fd >= 128) return -1;
   int write_value;
-  lock_acquire(&filesys_lock);
+  lock_acquire(&disk_lock);
   if(fd == 1){
     putbuf(buffer, size);
     write_value = size;
@@ -264,7 +264,7 @@ int write(int fd, const void *buffer, unsigned size){
    
   }else
     write_value = -1;
-  lock_release(&filesys_lock);
+  lock_release(&disk_lock);
   return write_value;
 }
 
@@ -314,9 +314,9 @@ void munmap(mapid_t mapid){
   while(e!=list_end(&thread_current()->mmap_table)){
     struct mmap_entry* me = list_entry(e, struct mmap_entry, elem);
     if(me->mapid == mapid){
-      lock_acquire(&filesys_lock);
+      lock_acquire(&disk_lock);
       write_back(thread_current()->pagedir, me);
-      lock_release(&filesys_lock);
+      lock_release(&disk_lock);
       list_remove(&me->elem);
       // free(me);
     }

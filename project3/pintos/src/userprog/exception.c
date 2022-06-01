@@ -182,6 +182,7 @@ page_fault (struct intr_frame *f)
    bool writable = true;
    if (kpage == NULL){
       lock_acquire(&swap_lock);
+      printf("BEFORE kpage: %p, tid: %d\n", kpage, thread_current()->tid);
       reclaim();
       kpage = palloc_get_page(PAL_USER);
       printf("AFTER kpage: %p, tid: %d\n\n", kpage, thread_current()->tid);
@@ -275,9 +276,7 @@ void load_stack_segment(uint32_t* fault_addr, void* f_esp){
          if(kpage == NULL){
             lock_acquire(&swap_lock);
             reclaim();
-            printf("end reclaim\n");
             kpage = palloc_get_page(PAL_USER);
-            printf("AFTER kpage: %p\n", kpage);
             lock_release(&swap_lock);
          }
 

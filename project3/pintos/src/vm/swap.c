@@ -16,51 +16,56 @@
 void swap_init(){
     swap_disk = block_get_role(BLOCK_SWAP);
     swap_bitmap = bitmap_create(block_size(swap_disk) / SECTORS);
-    bitmap_set_all(swap_bitmap, true);
+    bitmap_set_all(swap_bitmap, false);
     ASSERT(swap_bitmap != NULL);
 
     list_init(&swap_table);
+    lock_init(&frame_lock);
     lock_init(&swap_lock);
+    lock_init(&disk_lock);
 }
 
 void swap_out(struct frame_entry *fte){
-    // lock_acquire(&swap_lock);
-    // printf(">>> swap out\n");
-    //swap table entry 만들기
-    size_t idx = bitmap_scan_and_flip(swap_bitmap, 0, 1, true);
+    lock_acquire(&disk_lock);
+    pagedir_clear_page(fte->pd, fte->upage);   // fte->upage: reclaim 대상 (박힌돌)
+    size_t idx = bitmap_scan_and_flip(swap_bitmap, 0, 1, false);
+    if(idx == -1){
+        PANIC("swap disk overflow");
+    }
     struct swap_entry* se = malloc(sizeof *se);
     se->pd = fte->pd;
     se->upage = fte->upage;
     se->sector = idx * SECTORS;
 
     //disk 쓰기
+    printf("idx: %d\n", idx);
+    printf("se->upage: %p\n", se->upage);
     size_t i;
     for(i=0; i<SECTORS; i++){
+        printf("i: %d, ", i);
         block_write(swap_disk, se->sector + i, se->upage + (i * BLOCK_SECTOR_SIZE / 4));
     }
-    // bitmap_set(swap_bitmap, se->sector/SECTORS, true);
+    lock_release(&disk_lock);
     list_push_back(&swap_table, &se->elem);
 
-    pagedir_clear_page(fte->pd, fte->upage);   // fte->upage: reclaim 대상 (박힌돌)
+    lock_acquire(&frame_lock);
     list_remove(&fte->elem);
     palloc_free_page(fte->kpage);
+    lock_release(&frame_lock);
     free(fte);
-    // lock_release(&swap_lock);
 }
 
 void swap_in(uint32_t* kpage, struct swap_entry *se){
-    lock_acquire(&swap_lock);
-
+    lock_acquire(&disk_lock);
     int i;
     for(i=0; i<SECTORS; i++){
         block_read(swap_disk, se->sector+i, kpage+(i*BLOCK_SECTOR_SIZE/4));
     }
-
     bitmap_flip(swap_bitmap, se->sector/SECTORS);
-    // bitmap_reset(swap_bitmap, se->sector/SECTORS);
+    lock_release(&disk_lock);
+
     list_remove(&se->elem);
     free(se);
-    lock_release(&swap_lock);
 }
 
 struct swap_entry* get_swap_entry(uint32_t*pd, uint32_t*upage){
@@ -84,11 +89,12 @@ void reclaim(){
         bool accessed = pagedir_is_accessed(fte->pd, fte->upage);
 
         if(!dirty && !accessed){   // need to reclaim
-            uint32_t *tmp = palloc_get_page(PAL_USER);
-            printf("BEFORE kpage: %p, tid: %d\n", tmp, thread_current()->tid);
+            // printf("START swap_out, tid: %d\n", thread_current()->tid);
             swap_out(fte);
-            // tmp = palloc_get_page(PAL_USER);
-            // printf("AFTER kpage: %p\n", tmp);
+            // printf("END swap_out, tid: %d\n", thread_current()->tid);
+            // uint32_t *tmp = palloc_get_page(PAL_USER);
+            // printf("tmp: %p\n", tmp);
+            // palloc_free_page(tmp);
             return;
         }
 
@@ -108,5 +114,18 @@ void reclaim(){
 
         if(e == list_end(&frame_table))
             e = list_begin(&frame_table);
+    }
+}
+
+void swap_disk_free(uint32_t *pd){
+    struct list_elem *e = list_begin(&swap_table);
+    while(e != list_end(&swap_table)){
+        struct swap_entry *se = list_entry(e, struct swap_entry, elem);
+        if(se->pd == pd){
+            bitmap_flip(swap_bitmap, se->sector/SECTORS);
+            list_remove(&se->elem);
+            // free(se);
+        }
+        e = list_next(e);
     }
 }

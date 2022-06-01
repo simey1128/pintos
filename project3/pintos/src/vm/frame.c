@@ -27,12 +27,15 @@ falloc(uint32_t *kpage, uint32_t *upage){
     e -> upage = upage;
     e -> kpage = kpage;
 
+    lock_acquire(&frame_lock);
     list_insert_ordered(&frame_table, &e->elem, cmp_fid, NULL);
+    lock_release(&frame_lock);
     return fid;
 }
 
 void
 ffree(uint32_t *pte){
+    lock_acquire(&frame_lock);
     fid_t fid = (*pte & 0xfffff000) >> 12;
     struct list_elem *e = list_begin(&frame_table);
     while(e != list_end(&frame_table)){
@@ -43,10 +46,11 @@ ffree(uint32_t *pte){
             // palloc_free_page(f->kpage);
             // printf("after\n");
             free(f);
-            return;
+            break;
         }
         e = e->next;
     }
+    lock_release(&frame_lock);
 }
 
 bool cmp_fid(const struct list_elem *_l, const struct list_elem *_s, void *aux){
