@@ -21,6 +21,7 @@ falloc(uint32_t *kpage, uint32_t *upage){
     e -> pd = thread_current() -> pagedir;
     e -> upage = upage;
     e -> kpage = kpage;
+    e -> swap_disable = false;
 
     list_push_back(&frame_table, &e->elem);
     lock_release(&swap_lock);

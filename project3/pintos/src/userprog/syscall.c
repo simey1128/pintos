@@ -232,17 +232,19 @@ int filesize(int fd){
 int read(int fd, void *buffer, unsigned size){
   check_addr(buffer);
   check_addr(buffer+size-1);
+  lock_acquire(&filesys_lock);
+  set_swap_disable(buffer, size, true);
   if(fd >= 128) return -1;
   int read_value;
   if(fd == 0){
     *(char *)buffer = input_getc();
     read_value = size;
   }else if(fd > 2){
-    lock_acquire(&filesys_lock);
     read_value = file_read(thread_current() -> fd_list[fd], buffer, size);
-    lock_release(&filesys_lock);
   }else
     read_value = -1;
+  set_swap_disable(buffer, size, false);
+  lock_release(&filesys_lock);
   return read_value;
 }
 
@@ -252,6 +254,7 @@ int write(int fd, const void *buffer, unsigned size){
   if(fd >= 128) return -1;
   int write_value;
   lock_acquire(&filesys_lock);
+  set_swap_disable(buffer, size, true);
   if(fd == 1){
     putbuf(buffer, size);
     write_value = size;
@@ -263,6 +266,7 @@ int write(int fd, const void *buffer, unsigned size){
    
   }else
     write_value = -1;
+  set_swap_disable(buffer, size, false);
   lock_release(&filesys_lock);
   return write_value;
 }
@@ -320,5 +324,17 @@ void munmap(mapid_t mapid){
       // free(me);
     }
     e = e->next;
+  }
+}
+
+void
+set_swap_disable(void *buffer, int size, bool value){
+  struct list_elem *e = list_begin(&frame_table);
+  while(e != list_end(&frame_table)){
+    struct frame_entry *fte = list_entry(e, struct frame_entry, elem);
+    if(fte->upage >= buffer && fte->upage < buffer + size){
+      fte->swap_disable = value;
+    }
+    e = list_next(e);
   }
 }

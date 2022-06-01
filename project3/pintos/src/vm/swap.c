@@ -76,7 +76,7 @@ void reclaim(){
         bool dirty = pagedir_is_dirty(fte->pd, fte->upage);
         bool accessed = pagedir_is_accessed(fte->pd, fte->upage);
 
-        if(!dirty && !accessed){   // need to reclaim
+        if(!dirty && !accessed && !fte->swap_disable){   // need to reclaim
             swap_out(fte);
             return;
         }

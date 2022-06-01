@@ -24,4 +24,6 @@ unsigned tell(int);
 void close(int);
 mapid_t mmap(int, void *);
 void munmap(mapid_t);
+
+void set_swap_disable(void *buffer, int size, bool value);
 #endif /* userprog/syscall.h */

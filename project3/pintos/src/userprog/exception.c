@@ -185,10 +185,8 @@ page_fault (struct intr_frame *f)
    uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
    bool writable = true;
    if (kpage == NULL){
-      // lock_acquire(&swap_lock);
       reclaim();
       kpage = palloc_get_page(PAL_USER);
-      // lock_release(&swap_lock);
    }
 
    // 1-2. check swap_in

@@ -16,8 +16,7 @@ struct frame_entry{
     uint32_t *upage;
     uint32_t *kpage;
 
-    bit accessed;
-    bit dirty;
+    bool swap_disable;
 
     struct list_elem elem;
 };
