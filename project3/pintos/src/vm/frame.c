@@ -39,6 +39,9 @@ ffree(uint32_t *pte){
         struct frame_entry *f = list_entry(e, struct frame_entry, elem);
         if(f -> fid == fid){
             list_remove(&f->elem);
+            // printf("before\n");
+            // palloc_free_page(f->kpage);
+            // printf("after\n");
             free(f);
             return;
         }

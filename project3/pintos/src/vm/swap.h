@@ -23,3 +23,4 @@ struct swap_entry* get_swap_entry(uint32_t*pd, uint32_t*upage);
 #endif
 void swap_init(void);
 void swap_out(struct frame_entry *);
+void reclaim();
