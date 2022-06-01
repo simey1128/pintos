@@ -51,9 +51,7 @@ void swap_in(uint32_t* kpage, struct swap_entry *se){
 
     int i;
     for(i=0; i<SECTORS; i++){
-        // printf("BEFORE block_read\n");
         block_read(swap_disk, se->sector+i, kpage+(i*BLOCK_SECTOR_SIZE/4));
-        // printf("AFTER block_read\n");
     }
 
     bitmap_flip(swap_bitmap, se->sector/SECTORS);

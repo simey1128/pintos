@@ -62,7 +62,7 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  // printf("syscall num.: %d\n", *(uint8_t *)(f -> esp));
+  // printf("f->esp: %p\n", f->esp);
   if((f -> esp)>=PHYS_BASE-4) exit(-1);
   switch(*(uint8_t *)(f -> esp)){
     case SYS_HALT:
@@ -99,7 +99,6 @@ syscall_handler (struct intr_frame *f UNUSED)
 
     case SYS_READ:
       f -> eax = read(*(uint32_t *) (f -> esp + 20), *(uint32_t *)(f -> esp + 24), *(uint32_t *)(f -> esp + 28));
-
       break;
 
     case SYS_WRITE:
