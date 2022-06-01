@@ -158,6 +158,10 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+  if(!not_present){
+     exit(-1);
+  }
+
 /* FOR DEBUGING!!! */
 //   printf("fault_addr: %p\n", fault_addr);
 //   if(fault_addr==NULL) printf("fault_addr==NULL\n");
@@ -222,13 +226,13 @@ page_fault (struct intr_frame *f)
    exit(-1);
 
 done:
-   if(falloc(kpage, upage) == -1){
-      printf("exit(-1) in falloc\n");
-      exit(-1);
-   }
+   falloc(kpage, upage);
    if(!install_page(upage, kpage, writable)){
+      lock_acquire(&swap_lock);
+      pagedir_clear_page(thread_current()->pagedir, upage);
       palloc_free_page(kpage);
-      // exit(-1);
+      lock_release(&swap_lock);
+      exit(-1);
       PANIC("Fail of install_page");
    }
 }
@@ -240,7 +244,7 @@ lazy_load_segment (struct spage_entry* spte, uint32_t *kpage){
    file_seek (spte->file, spte->ofs);
    if (file_read (spte->file, kpage, spte->read_bytes) != (int) spte->read_bytes)
    {
-      palloc_free_page (kpage);
+      // palloc_free_page (kpage);
       return false; 
    }
    memset (kpage + spte->read_bytes, 0, spte->zero_bytes);
@@ -281,16 +285,12 @@ void load_stack_segment(uint32_t* fault_addr, void* f_esp){
             swap_in(kpage, se);
          }
 
-         if(falloc(kpage, stack_boundary) == -1){
-            exit(-1);
-         }
+         falloc(kpage, stack_boundary);
          if(!install_page(stack_boundary, kpage, true)){
             palloc_free_page(kpage);
             // exit(-1);
             PANIC("Fail of install_page");
          }
-         
-         // kpage 재할당 문제!!!!!
       }
 }
 

@@ -40,10 +40,13 @@ void spt_free(){
     uint32_t *pd = thread_current()->pagedir;
     struct list_elem *e = list_begin(&thread_current()->spage_table);
     while(e != list_end(&thread_current()->spage_table)){
+        lock_acquire(&swap_lock);
         struct spage_entry *spte = list_entry(e, struct spage_entry, elem);
+        list_remove(&spte->elem);
         pagedir_clear_page(pd, spte->upage);
-        list_remove(&spte);
+        palloc_free_page(pagedir_get_page(pd, spte->upage));
         // free(spte);
+        lock_release(&swap_lock);
 
         e = list_next(e);
     }
@@ -77,7 +80,6 @@ struct mmap_entry* get_me(uint32_t *uaddr){
    struct list_elem *e = list_begin(&thread_current()->mmap_table);
    while(e != list_end(&thread_current()->mmap_table)){
       struct mmap_entry *me = list_entry(e, struct mmap_entry, elem);
-      // int32_t size = me -> file -> inode -> data.length;
       if (uaddr >= me -> start_addr && uaddr < me->start_addr+me->file_size){
          return me;
       }

@@ -170,7 +170,6 @@ void exit(int status){
       munmap(i);
       close(i);
     }
-
   }
   
   thread_exit();

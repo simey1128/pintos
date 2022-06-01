@@ -47,6 +47,7 @@
         "typeinfo": "c",
         "filesys.h": "c",
         "block.h": "c",
-        "bitmap.h": "c"
+        "bitmap.h": "c",
+        "list.h": "c"
     }
 }

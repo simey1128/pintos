@@ -512,9 +512,7 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
-  fid_t fid = falloc(kpage, ((uint8_t *) PHYS_BASE) - PGSIZE);
-  if(fid == -1)
-    return false;   // TODO
+  falloc(kpage, ((uint8_t *) PHYS_BASE) - PGSIZE);
   thread_current()->stack_boundary = ((uint8_t *) PHYS_BASE) - PGSIZE;
   return success;
 }

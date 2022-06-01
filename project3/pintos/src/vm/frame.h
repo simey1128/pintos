@@ -12,7 +12,6 @@ typedef uint32_t fid_t;
 typedef bool bit;
 
 struct frame_entry{
-    fid_t fid;
     uint32_t *pd;
     uint32_t *upage;
     uint32_t *kpage;
@@ -25,9 +24,7 @@ struct frame_entry{
 
 struct list frame_table;
 
-fid_t falloc(uint32_t *, uint32_t *);
+void falloc(uint32_t *, uint32_t *);
 void ffree(uint32_t *);
-
-bool cmp_fid(const struct list_elem *, const struct list_elem *, void *);
 
 #endif

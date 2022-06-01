@@ -15,48 +15,45 @@
 
 void swap_init(){
     swap_disk = block_get_role(BLOCK_SWAP);
-    swap_bitmap = bitmap_create(block_size(swap_disk) / SECTORS);
+    swap_bitmap = bitmap_create(block_size(swap_disk)/SECTORS);
     bitmap_set_all(swap_bitmap, false);
-    ASSERT(swap_bitmap != NULL);
 
     list_init(&swap_table);
     lock_init(&swap_lock);
 }
 
 void swap_out(struct frame_entry *fte){
-    // printf(">>> swap out\n");
     //swap table entry 만들기
     size_t idx = bitmap_scan_and_flip(swap_bitmap, 0, 1, false);
     struct swap_entry* se = malloc(sizeof *se);
     se->pd = fte->pd;
     se->upage = fte->upage;
-    se->sector = idx * SECTORS;
+    se->sector = idx;
 
     //disk 쓰기
     size_t i;
     for(i=0; i<SECTORS; i++){
-        block_write(swap_disk, se->sector + i, se->upage + (i * BLOCK_SECTOR_SIZE / 4));
+        block_write(swap_disk, se->sector*SECTORS + i, fte->kpage + (i * BLOCK_SECTOR_SIZE/4));
     }
-    // bitmap_set(swap_bitmap, se->sector/SECTORS, true);
+    // bitmap_set(swap_bitmap, se->sector, true);
+    
     list_push_back(&swap_table, &se->elem);
-
-    pagedir_clear_page(fte->pd, fte->upage);   // fte->upage: reclaim 대상 (박힌돌)
     list_remove(&fte->elem);
+    pagedir_clear_page(fte->pd, fte->upage);   // fte->upage: reclaim 대상 (박힌돌)
     palloc_free_page(fte->kpage);
-    free(fte);
+    // free(fte);
 }
 
 void swap_in(uint32_t* kpage, struct swap_entry *se){
 
     int i;
     for(i=0; i<SECTORS; i++){
-        block_read(swap_disk, se->sector+i, kpage+(i*BLOCK_SECTOR_SIZE/4));
+        block_read(swap_disk, se->sector * SECTORS + i, kpage+(i*BLOCK_SECTOR_SIZE/4));
     }
 
-    bitmap_flip(swap_bitmap, se->sector/SECTORS);
-    // bitmap_reset(swap_bitmap, se->sector/SECTORS);
+    bitmap_flip(swap_bitmap, se->sector);
     list_remove(&se->elem);
-    free(se);
+    // free(se);
 }
 
 struct swap_entry* get_swap_entry(uint32_t*pd, uint32_t*upage){
@@ -80,10 +77,7 @@ void reclaim(){
         bool accessed = pagedir_is_accessed(fte->pd, fte->upage);
 
         if(!dirty && !accessed){   // need to reclaim
-            uint32_t *tmp = palloc_get_page(PAL_USER);
             swap_out(fte);
-            // tmp = palloc_get_page(PAL_USER);
-            // printf("AFTER kpage: %p\n", tmp);
             return;
         }
 
