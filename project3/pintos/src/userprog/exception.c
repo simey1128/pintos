@@ -181,17 +181,16 @@ page_fault (struct intr_frame *f)
    uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
    bool writable = true;
    if (kpage == NULL){
-      lock_acquire(&swap_lock);
+      // lock_acquire(&swap_lock);
       reclaim();
       kpage = palloc_get_page(PAL_USER);
-      printf("AFTER kpage: %p, tid: %d\n\n", kpage, thread_current()->tid);
-      lock_release(&swap_lock);
+      // lock_release(&swap_lock);
    }
 
    // 1-2. check swap_in
    struct swap_entry* se = get_swap_entry(thread_current()->pagedir, upage);
    if(se!=NULL){
-      printf(">>> 1-2\n");
+      // printf(">>> 1-2\n");
       swap_in(kpage, se);
       goto done;
    }
@@ -199,7 +198,7 @@ page_fault (struct intr_frame *f)
    // 2-2. check mmap segment
    struct mmap_entry *me = get_me(fault_addr);
    if(me != NULL){
-      printf(">>> 2-2\n");
+      // printf(">>> 2-2\n");
       if(!load_mapped_file(me, upage, kpage)){
          // printf(">>> exit(-1) in 2-2\n");
          exit(-1);
@@ -273,12 +272,8 @@ void load_stack_segment(uint32_t* fault_addr, void* f_esp){
          stack_boundary -= PGSIZE/4; 
          uint8_t *kpage = palloc_get_page(PAL_USER); //kpage and reclaim
          if(kpage == NULL){
-            lock_acquire(&swap_lock);
             reclaim();
-            printf("end reclaim\n");
             kpage = palloc_get_page(PAL_USER);
-            printf("AFTER kpage: %p\n", kpage);
-            lock_release(&swap_lock);
          }
 
          struct swap_entry* se = get_swap_entry(thread_current()->pagedir, stack_boundary);

@@ -16,7 +16,7 @@
 void swap_init(){
     swap_disk = block_get_role(BLOCK_SWAP);
     swap_bitmap = bitmap_create(block_size(swap_disk) / SECTORS);
-    bitmap_set_all(swap_bitmap, true);
+    bitmap_set_all(swap_bitmap, false);
     ASSERT(swap_bitmap != NULL);
 
     list_init(&swap_table);
@@ -24,10 +24,9 @@ void swap_init(){
 }
 
 void swap_out(struct frame_entry *fte){
-    // lock_acquire(&swap_lock);
     // printf(">>> swap out\n");
     //swap table entry 만들기
-    size_t idx = bitmap_scan_and_flip(swap_bitmap, 0, 1, true);
+    size_t idx = bitmap_scan_and_flip(swap_bitmap, 0, 1, false);
     struct swap_entry* se = malloc(sizeof *se);
     se->pd = fte->pd;
     se->upage = fte->upage;
@@ -45,11 +44,9 @@ void swap_out(struct frame_entry *fte){
     list_remove(&fte->elem);
     palloc_free_page(fte->kpage);
     free(fte);
-    // lock_release(&swap_lock);
 }
 
 void swap_in(uint32_t* kpage, struct swap_entry *se){
-    lock_acquire(&swap_lock);
 
     int i;
     for(i=0; i<SECTORS; i++){
@@ -60,7 +57,6 @@ void swap_in(uint32_t* kpage, struct swap_entry *se){
     // bitmap_reset(swap_bitmap, se->sector/SECTORS);
     list_remove(&se->elem);
     free(se);
-    lock_release(&swap_lock);
 }
 
 struct swap_entry* get_swap_entry(uint32_t*pd, uint32_t*upage){
@@ -85,7 +81,6 @@ void reclaim(){
 
         if(!dirty && !accessed){   // need to reclaim
             uint32_t *tmp = palloc_get_page(PAL_USER);
-            printf("BEFORE kpage: %p, tid: %d\n", tmp, thread_current()->tid);
             swap_out(fte);
             // tmp = palloc_get_page(PAL_USER);
             // printf("AFTER kpage: %p\n", tmp);
