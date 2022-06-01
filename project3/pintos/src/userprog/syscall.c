@@ -321,8 +321,6 @@ void munmap(mapid_t mapid){
       list_remove(&me->elem);
       // free(me);
     }
-
     e = e->next;
   }
-
 }

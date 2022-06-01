@@ -167,7 +167,7 @@ page_fault (struct intr_frame *f)
    // 0. user validity
   if(fault_addr==NULL || !user || is_kernel_vaddr(fault_addr)) {
    //   PANIC("exception validty");
-      printf("user validity\n");
+      // printf("user validity\n");
      exit(-1);
   }
 
@@ -176,26 +176,27 @@ page_fault (struct intr_frame *f)
    uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
    bool writable = true;
    if (kpage == NULL){
-      // printf("need to swap out\n");
+      // printf(">>> need to swap out\n");
+      lock_acquire(&swap_lock);
       reclaim(upage);
       kpage = palloc_get_page(PAL_USER);
-      printf("kapge: %p\n",kpage);
-      printf("fault_addr: %p\n", fault_addr);
+      lock_release(&swap_lock);
+      // printf(">>> swap out success, fault_addr: %p\n", fault_addr);
    }
 
    // 1-2. check swap_in
    struct swap_entry* se = get_swap_entry(thread_current()->pagedir, upage);
    if(se!=NULL){
-      printf("swap_in\n");
+      // printf(">>> 1-2\n");
       swap_in(kpage, se);
       goto done;
    }
 
    // 2-1. check stack segment
    if(fault_addr > PHYS_BASE - 0x800000 && fault_addr <= thread_current() -> stack_boundary){
-      printf("2-1\n");
+      // printf(">>> 2-1\n");
       if(fault_addr < f->esp){
-         printf("2-1\n");
+         printf(">>> exit(-1) in 2-1\n");
          exit(-1);
       }
       thread_current() -> stack_boundary = upage;
@@ -205,9 +206,9 @@ page_fault (struct intr_frame *f)
    // 2-2. check mmap segment
    struct mmap_entry *me = get_me(fault_addr);
    if(me != NULL){
-      printf("2-2\n");
+      // printf(">>> 2-2\n");
       if(!load_mapped_file(me, upage, kpage)){
-         printf("2-2\n");
+         printf(">>> exit(-1) in 2-2\n");
          exit(-1);
       }
       goto done;
@@ -216,9 +217,9 @@ page_fault (struct intr_frame *f)
    // 2-3. lazy load segment
    struct spage_entry* spte = get_spte(upage);
    if(spte != NULL){
-      printf("spte != NULL, fault_addr: %p\n", fault_addr);
+      // printf(">>> 2-3 spte != NULL, fault_addr: %p\n", fault_addr);
       if(!lazy_load_segment(spte, kpage)){
-         printf("2-3\n");
+         // printf(">>> exit(-1) in 2-3\n");
          exit(-1);
       }
       upage = spte->upage;
@@ -226,7 +227,7 @@ page_fault (struct intr_frame *f)
       goto done;
    }
    // PANIC("NOT REACHED, page_fault");
-   printf("NOT_REACHED\n");
+   // printf(">>> exit(-1) in NOT_REACHED\n");
    exit(-1);
 
 done:

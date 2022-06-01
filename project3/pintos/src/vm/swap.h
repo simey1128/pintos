@@ -1,9 +1,11 @@
 #ifndef VM_SWAP_H
 #define VM_SWAP_H
 #include "devices/block.h"
+#include "threads/synch.h"
 #include <list.h>
 
 typedef bool bit;
+struct lock swap_lock;
 
 struct swap_entry{
     uint32_t *pd;
