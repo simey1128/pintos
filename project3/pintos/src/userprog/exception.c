@@ -170,58 +170,38 @@ page_fault (struct intr_frame *f)
       // printf("user validity\n");
      exit(-1);
   }
+  
+   if(fault_addr > PHYS_BASE - 0x800000 && fault_addr <= thread_current() -> stack_boundary){
+      load_stack_segment(fault_addr, f->esp);
+      return;
+   }
 
    // 1-1. check swap_out
    uint8_t *kpage = palloc_get_page(PAL_USER);
    uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
    bool writable = true;
    if (kpage == NULL){
-      printf(">>> need to swap out\n");
-      // lock_acquire(&swap_lock);
-      reclaim(upage);
+      // printf(">>> need to swap out\n");
+      lock_acquire(&swap_lock);
+      reclaim();
       kpage = palloc_get_page(PAL_USER);
-      // lock_release(&swap_lock);
+      lock_release(&swap_lock);
       // printf(">>> swap out success, fault_addr: %p\n", fault_addr);
    }
 
    // 1-2. check swap_in
    struct swap_entry* se = get_swap_entry(thread_current()->pagedir, upage);
    if(se!=NULL){
-      printf(">>> 1-2\n");
+      // printf(">>> 1-2\n");
       swap_in(kpage, se);
       goto done;
-   }
-
-   // 2-1. check stack segment
-   if(fault_addr > PHYS_BASE - 0x800000 && fault_addr <= thread_current() -> stack_boundary){
-      printf(">>> 2-1\n");
-      if(fault_addr < f->esp-4){
-         exit(-1);
-      }
-      thread_current() -> stack_boundary = upage;
-      goto done;
-      // while(stack_boundary != upage){
-      //    stack_boundary -= PGSIZE;
-      //    if(falloc(kpage, stack_boundary) == -1){
-      //       printf("falloc\n");
-      //       exit(-1);
-      //    }
-      //    if(!install_page(stack_boundary, kpage, writable)){
-      //       palloc_free_page(kpage);
-      //       // exit(-1);
-      //       PANIC("Fail of install_page");
-      //    }
-      //    // kpage 재할당 문제!!!!!
-      // }
-      // return;
    }
 
    // 2-2. check mmap segment
    struct mmap_entry *me = get_me(fault_addr);
    if(me != NULL){
-      printf(">>> 2-2\n");
       if(!load_mapped_file(me, upage, kpage)){
-         printf(">>> exit(-1) in 2-2\n");
+         // printf(">>> exit(-1) in 2-2\n");
          exit(-1);
       }
       goto done;
@@ -230,7 +210,6 @@ page_fault (struct intr_frame *f)
    // 2-3. lazy load segment
    struct spage_entry* spte = get_spte(upage);
    if(spte != NULL){
-      printf(">>> 2-3 spte != NULL, fault_addr: %p\n", fault_addr);
       if(!lazy_load_segment(spte, kpage)){
          // printf(">>> exit(-1) in 2-3\n");
          exit(-1);
@@ -240,12 +219,10 @@ page_fault (struct intr_frame *f)
       goto done;
    }
    // PANIC("NOT REACHED, page_fault");
-   printf(">>> exit(-1) in NOT_REACHED\n");
    exit(-1);
 
 done:
    if(falloc(kpage, upage) == -1){
-      printf("falloc\n");
       exit(-1);
    }
    if(!install_page(upage, kpage, writable)){
@@ -280,6 +257,44 @@ int load_mapped_file(struct mmap_entry *me, uint32_t *upage, uint32_t *kpage){
 
    return true;
 }
+
+void load_stack_segment(uint32_t* fault_addr, void* f_esp){
+   uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
+   uint32_t *f_esp_page = (uint32_t *)((uint32_t)f_esp & 0xfffff000);
+   uint32_t *stack_boundary = thread_current()->stack_boundary;
+   
+   if(fault_addr < f_esp-4){
+      exit(-1);
+   }
+
+   while(stack_boundary >= f_esp_page){
+         stack_boundary -= PGSIZE/4; 
+         uint8_t *kpage = palloc_get_page(PAL_USER); //kpage and reclaim
+         if(kpage == NULL){
+            lock_acquire(&swap_lock);
+            reclaim();
+            kpage = palloc_get_page(PAL_USER);
+            lock_release(&swap_lock);
+         }
+
+         struct swap_entry* se = get_swap_entry(thread_current()->pagedir, stack_boundary);
+         if(se!=NULL){
+            swap_in(kpage, se);
+         }
+
+         if(falloc(kpage, stack_boundary) == -1){
+            exit(-1);
+         }
+         if(!install_page(stack_boundary, kpage, true)){
+            palloc_free_page(kpage);
+            // exit(-1);
+            PANIC("Fail of install_page");
+         }
+         
+         // kpage 재할당 문제!!!!!
+      }
+}
+
 
 
 static bool
