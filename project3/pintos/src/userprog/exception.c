@@ -161,57 +161,71 @@ page_fault (struct intr_frame *f)
 
    // 0. user validity
   if(fault_addr==NULL || !user || is_kernel_vaddr(fault_addr)) {
-   //   PANIC("exception validty");
-      // printf("user validity\n");
+     printf("fault_addr: %p\n", fault_addr);
+     printf("user? %d\n",user);
+     PANIC("exception validty");
      exit(-1);
   }
-
+   // printf("fault_addr: %p\n", fault_addr);
    if(not_present){
+      // printf("not_present\n");
       struct thread *t = thread_current();
       uint32_t *pd = t -> pagedir;
       uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
       uint32_t *kpage = falloc(PAL_USER);
+      printf("after falloc, kpage: %p\n", kpage);
 
       struct spage_entry *spte = get_spte(pd, upage);
       struct mmap_entry *me = get_me(pd, upage);
       struct stack_entry *stke = get_stke(pd, upage);
       struct swap_entry *se = get_swap_entry(pd, upage);
+      printf("after all\n");
 
       if(spte == NULL && me == NULL && stke == NULL && se == NULL){
+         // printf("all null\n");
          if(!is_stack(fault_addr, f->esp) && (stke != NULL)){
+            // printf("first\n");
             exit(-1);
          }
+         printf("before load_stack_segment\n");
          load_stack_segment(fault_addr);
+         printf("after load_stack_segment\n");
          return;
       }
+      printf("after stack growth\n");
       if(spte != NULL && se == NULL){
+         printf("spte\n");
          if(!lazy_load_segment(spte, kpage)){
-            ffree(spte->upage);
+            ffree(spte->vpage.upage);
+            // printf("lazy_load_segment false\n");
             exit(-1);
          }
-         if(!_install_page(spte->upage, kpage, spte->writable)){
-            ffree(spte->upage);
+         if(!install_page(spte->vpage.upage, kpage, spte->vpage.writable)){
+            // printf("install page false\n");
+            ffree(spte->vpage.upage);
             exit(-1);
          }
-         spte -> on_frame = true;
+         spte->vpage.on_frame = true;
          return;
       }
       if(me != NULL && se == NULL){
+         printf("me\n");
          if(!load_mapped_file(me, kpage)){
-            ffree(me->upage);
+            ffree(me->vpage.upage);
             exit(-1);
          }
-         if(!_install_page(me->upage, kpage, me->writable)){
-            ffree(me->upage);
+         if(!install_page(me->vpage.upage, kpage, true)){
+            ffree(me->vpage.upage);
             exit(-1);
          }
-         me -> on_frame = true;
+         me->vpage.on_frame = true;
          return;
       }
       if(se != NULL){
+         printf("se\n");
          swap_in(kpage, se);
          list_remove(&se->elem);
-         if(!_install_page(se->upage, kpage, se->writable)){
+         if(!install_page(se->upage, kpage, se->writable)){
             ffree(se->upage);
             exit(-1);
          }
@@ -227,6 +241,9 @@ page_fault (struct intr_frame *f)
 
 int
 lazy_load_segment (struct spage_entry* spte, uint32_t *kpage){
+   printf("in\n");
+   spte->vpage.kpage = kpage;
+   printf("lazy_load_segment, kpage: %p\n", kpage);
    file_seek (spte->file, spte->ofs);
    if (file_read (spte->file, kpage, spte->read_bytes) != (int) spte->read_bytes)
    {
@@ -239,7 +256,8 @@ lazy_load_segment (struct spage_entry* spte, uint32_t *kpage){
 }
 
 int load_mapped_file(struct mmap_entry *me, uint32_t *kpage){
-   int read_bytes = file_read_at(me -> file, (void *)kpage, PGSIZE, me->upage - me->start_addr);
+   me->vpage.kpage = kpage;
+   int read_bytes = file_read_at(me -> file, (void *)kpage, PGSIZE, me->vpage.upage - me->start_addr);
    if (read_bytes > PGSIZE){
       palloc_free_page (kpage);
       return false;
@@ -250,22 +268,23 @@ int load_mapped_file(struct mmap_entry *me, uint32_t *kpage){
 }
 
 void load_stack_segment(uint32_t* fault_addr){
-   uint32_t *kpage = falloc(PAL_USER | PAL_ZERO);
+   uint32_t *kpage = falloc(PAL_USER);
    struct stack_entry *stke = malloc(sizeof(*stke));
-   if(stke == NULL)
+   if(stke == NULL){
       return false;
+   }
    
-   stke -> pd = thread_current() -> pagedir;
-   stke -> upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
-   stke -> kpage = kpage;
-   stke -> on_frame = true;
-   stke -> swap_disable = false;
+   stke -> vpage.pd = thread_current() -> pagedir;
+   stke -> vpage.upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
+   stke -> vpage.kpage = kpage;
+   stke -> vpage.on_frame = true;
+   stke -> vpage.swap_disable = false;
 
-   list_push_back(&thread_current()->stack_table, &stke->elem);
+   list_push_back(&thread_current()->stack_table, &stke->vpage.elem);
    uint32_t *stack_boundary = thread_current()->stack_boundary;
 
-   if(!install_page(stke->upage, kpage, true)){
-      ffree(stke -> upage);
+   if(!install_page(stke->vpage.upage, kpage, true)){
+      ffree(stke -> vpage.upage);
       free(stke);
       return false;
    }

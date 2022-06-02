@@ -2,6 +2,7 @@
 #define VM_FRAME_H
 
 #include <list.h>
+#include "threads/palloc.h"
 
 #define NUM_FRAME_ENTRY 1024
 #define FRBITS 12
@@ -11,19 +12,10 @@
 typedef uint32_t fid_t;
 typedef bool bit;
 
-struct frame_entry{
-    uint32_t *pd;
-    uint32_t *upage;
-    uint32_t *kpage;
 
-    bool swap_disable;
 
-    struct list_elem elem;
-};
-
-struct list frame_table;
-
-uint32_t *falloc(enum palloc_flags);
 void ffree(uint32_t *);
+uint32_t *falloc(enum palloc_flags);
+
 
 #endif

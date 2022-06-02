@@ -107,12 +107,15 @@ start_process (void *cmd_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+  printf("before load\n");
   success = load (argv[0], &if_.eip, &if_.esp);
+  printf("after load\n");
 
-
+  printf("before success\n");
   if(success){
     arg_stack(argv, argc, &if_.esp);
   }
+  printf("after success\n");
   // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
   /* If load failed, quit. */
   palloc_free_page (cmd);
@@ -221,6 +224,7 @@ process_exit (void)
          directory, or our active page directory will be one
          that's been freed (and cleared). */
       spt_free();
+      stack_free();
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
@@ -506,17 +510,18 @@ setup_stack (void **esp)
   struct thread *t = thread_current();
   bool success = false;
 
+  
   kpage = falloc(PAL_USER | PAL_ZERO);
   if(install_page(upage, kpage, true)){
     *esp = PHYS_BASE;
     struct stack_entry *stke = malloc(sizeof(*stke));
-    stke -> pd = t -> pagedir;
-    stke -> upage = upage;
-    stke -> kpage = kpage;
-    stke -> on_frame = true;
-    stke -> swap_disable = false;
+    stke -> vpage.pd = t -> pagedir;
+    stke -> vpage.upage = upage;
+    // stke -> vpage.kpage = kpage;
+    stke -> vpage.on_frame = true;
+    stke -> vpage.swap_disable = false;
 
-    list_push_back(&t->stack_table, &stke->elem);
+    list_push_back(&t->stack_table, &stke->vpage.elem);
   }else{
     ffree(upage);
     return false;

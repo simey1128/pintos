@@ -12,15 +12,18 @@
 
 #define NOT_REACHED() PANIC ("frame, frame overflow");
 
-static fid_t allocate_fid(void);
 
-uint32_t
-*falloc(enum palloc_flags flag){
+uint32_t*
+falloc(enum palloc_flags flag){
+    uint32_t *kpage;
     lock_acquire(&swap_lock);
-    uint8_t *kpage = palloc_get_page(flag);
+    // printf("falloc, kpage: %p\n", kpage);
+    kpage = palloc_get_page(flag);
+    printf("falloc, kpage: %p\n", kpage);
     while(kpage == NULL){
-        reclame();
+        reclaim();
         kpage = palloc_get_page(flag);
+        printf("falloc, kpage: %p\n", kpage);
     }
     lock_release(&swap_lock);
     return kpage;
@@ -32,27 +35,27 @@ ffree(uint32_t *upage){   // After this, no kpage, not present upage
     uint32_t *pd = thread_current() -> pagedir;
     struct spage_entry *spte = get_spte(pd, upage);
     if(spte != NULL){
-        list_remove(&spte->elem);
-        pagedir_clear_page(pd, spte->upage);
-        palloc_free_page(spte->kpage);
+        list_remove(&spte->vpage.elem);
+        pagedir_clear_page(pd, spte->vpage.upage);
+        palloc_free_page(spte->vpage.kpage);
         free(spte);
         lock_release(&swap_lock);
         return;
     }
     struct mmap_entry *me = get_me(pd, upage);
     if(me != NULL){
-        list_remove(&me->elem);
-        pagedir_clear_page(pd, me->upage);
-        palloc_free_page(me->kpage);
+        list_remove(&me->vpage.elem);
+        pagedir_clear_page(pd, me->vpage.upage);
+        palloc_free_page(me->vpage.kpage);
         free(me);
         lock_release(&swap_lock);
         return;
     }
     struct stack_entry *stke = get_stke(pd, upage);
     if(stke != NULL){
-        list_remove(&stke->elem);
-        pagedir_clear_page(pd, stke->upage);
-        palloc_free_page(stke->kpage);
+        list_remove(&stke->vpage.elem);
+        pagedir_clear_page(pd, stke->vpage.upage);
+        palloc_free_page(stke->vpage.kpage);
         free(stke);
         lock_release(&swap_lock);
         return;
