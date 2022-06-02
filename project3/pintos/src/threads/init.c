@@ -103,9 +103,6 @@ main (void)
   palloc_init (user_page_limit);
   malloc_init ();
   paging_init ();
-#ifdef VM
-  list_init(&frame_table);
-#endif
 
   /* Segmentation. */
 #ifdef USERPROG

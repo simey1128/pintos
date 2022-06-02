@@ -115,6 +115,8 @@ struct thread
 
    struct file *current_file;
    struct list spage_table;
+   struct list mmap_table;
+   struct list stack_table;
    void* stack_boundary;
    uint32_t read_bytes;
   };

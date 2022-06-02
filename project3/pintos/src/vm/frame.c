@@ -14,33 +14,48 @@
 
 static fid_t allocate_fid(void);
 
-void
-falloc(uint32_t *kpage, uint32_t *upage){
+uint32_t
+*falloc(enum palloc_flags flag){
     lock_acquire(&swap_lock);
-    struct frame_entry *e = malloc(sizeof *e);
-    e -> pd = thread_current() -> pagedir;
-    e -> upage = upage;
-    e -> kpage = kpage;
-    e -> swap_disable = false;
-
-    list_push_back(&frame_table, &e->elem);
+    uint8_t *kpage = palloc_get_page(flag);
+    while(kpage == NULL){
+        reclame();
+        kpage = palloc_get_page(flag);
+    }
     lock_release(&swap_lock);
+    return kpage;
 }
 
 void
-ffree(uint32_t *kpage){
+ffree(uint32_t *upage){   // After this, no kpage, not present upage
     lock_acquire(&swap_lock);
-    struct list_elem *e = list_begin(&frame_table);
-    while(e != list_end(&frame_table)){
-        struct frame_entry *f = list_entry(e, struct frame_entry, elem);
-        if(f -> kpage == kpage){
-            list_remove(&f->elem);
-            pagedir_clear_page(f->pd, f->upage);
-            // palloc_free_page(f->kpage);
-            // free(f);
-            break;
-        }
-        e = e->next;
+    uint32_t *pd = thread_current() -> pagedir;
+    struct spage_entry *spte = get_spte(pd, upage);
+    if(spte != NULL){
+        list_remove(&spte->elem);
+        pagedir_clear_page(pd, spte->upage);
+        palloc_free_page(spte->kpage);
+        free(spte);
+        lock_release(&swap_lock);
+        return;
     }
-    lock_release(&swap_lock);
+    struct mmap_entry *me = get_me(pd, upage);
+    if(me != NULL){
+        list_remove(&me->elem);
+        pagedir_clear_page(pd, me->upage);
+        palloc_free_page(me->kpage);
+        free(me);
+        lock_release(&swap_lock);
+        return;
+    }
+    struct stack_entry *stke = get_stke(pd, upage);
+    if(stke != NULL){
+        list_remove(&stke->elem);
+        pagedir_clear_page(pd, stke->upage);
+        palloc_free_page(stke->kpage);
+        free(stke);
+        lock_release(&swap_lock);
+        return;
+    }
+    PANIC("NOT_REACHED, ffree");
 }

@@ -501,21 +501,27 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 static bool
 setup_stack (void **esp) 
 {
-  uint8_t *kpage;
+  uint32_t *kpage;
+  uint32_t *upage = ((uint8_t *) PHYS_BASE) - PGSIZE;
+  struct thread *t = thread_current();
   bool success = false;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-        *esp = PHYS_BASE;
-      else
-        palloc_free_page (kpage);
-    }
-  falloc(kpage, ((uint8_t *) PHYS_BASE) - PGSIZE);
-  thread_current()->stack_boundary = ((uint8_t *) PHYS_BASE) - PGSIZE;
-  return success;
+  kpage = falloc(PAL_USER | PAL_ZERO);
+  if(install_page(upage, kpage, true)){
+    *esp = PHYS_BASE;
+    struct stack_entry *stke = malloc(sizeof(*stke));
+    stke -> pd = t -> pagedir;
+    stke -> upage = upage;
+    stke -> kpage = kpage;
+    stke -> on_frame = true;
+    stke -> swap_disable = false;
+
+    list_push_back(&t->stack_table, &stke->elem);
+  }else{
+    ffree(upage);
+    return false;
+  }
+  return true;
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel

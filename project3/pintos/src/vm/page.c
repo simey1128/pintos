@@ -65,7 +65,7 @@ int write_back(uint32_t *pd, struct mmap_entry *me){
    }
 }
 
-struct spage_entry* get_spte(uint32_t* upage){
+struct spage_entry* get_spte(uint32_t *pd, uint32_t* upage){
    struct list_elem *e = list_begin(&thread_current()->spage_table);
     while(e != list_end(&thread_current()->spage_table)){
         struct spage_entry *spte = list_entry(e, struct spage_entry, elem);
@@ -76,12 +76,24 @@ struct spage_entry* get_spte(uint32_t* upage){
     return NULL;
 }
 
-struct mmap_entry* get_me(uint32_t *uaddr){
+struct mmap_entry* get_me(uint32_t *pd, uint32_t *upage){
    struct list_elem *e = list_begin(&thread_current()->mmap_table);
    while(e != list_end(&thread_current()->mmap_table)){
       struct mmap_entry *me = list_entry(e, struct mmap_entry, elem);
-      if (uaddr >= me -> start_addr && uaddr < me->start_addr+me->file_size){
+      if (me->upage == upage){
          return me;
+      }
+      e = list_next(e);
+   }
+   return NULL;
+}
+
+struct stack_entry* get_stke(uint32_t *pd, uint32_t *upage){
+   struct list_elem *e = list_begin(&thread_current()->stack_table);
+   while(e != list_end(&thread_current()->stack_table)){
+      struct stack_entry *stke = list_entry(e, struct stack_entry, elem);
+      if (stke->upage == upage){
+         return stke;
       }
       e = list_next(e);
    }

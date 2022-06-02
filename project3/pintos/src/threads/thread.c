@@ -487,7 +487,6 @@ init_thread (struct thread *t, const char *name, int priority)
   list_push_back (&all_list, &t->allelem);
 
 #ifdef USERPROG
-  list_init(&(t->mmap_table));
   t->parent = running_thread();
   sema_init(&(t->sema_exit),0);
   sema_init(&(t->sema_mem), 0);
@@ -496,6 +495,8 @@ init_thread (struct thread *t, const char *name, int priority)
   list_push_back(&(running_thread()->child_list), &(t->childelem));
 #endif
   list_init(&(t->spage_table));
+  list_init(&(t->mmap_table));
+  list_init(&(t->stack_table));
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

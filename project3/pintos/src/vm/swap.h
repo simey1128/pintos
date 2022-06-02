@@ -10,6 +10,8 @@ struct lock swap_lock;
 struct swap_entry{
     uint32_t *pd;
     uint32_t *upage;
+    uint32_t *kpage;
+    bool writable;
 
     block_sector_t sector;
     struct list_elem elem;

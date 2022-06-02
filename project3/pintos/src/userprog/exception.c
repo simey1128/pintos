@@ -18,6 +18,7 @@ static long long page_fault_cnt;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
+static bool is_stack(uint32_t *fault_addr, void *esp);
 static bool
 install_page (void *upage, void *kpage, bool writable);
 
@@ -158,81 +159,68 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  if(!not_present){
-     exit(-1);
-  }
-
-/* FOR DEBUGING!!! */
-//   printf("fault_addr: %p\n", fault_addr);
-//   if(fault_addr==NULL) printf("fault_addr==NULL\n");
-//   if(!user) printf("!user, fault_addr: %p\n", fault_addr);
-//   if(is_kernel_vaddr(fault_addr)) printf("is_kernel_vaddr(fault_addr)\n");
-
    // 0. user validity
   if(fault_addr==NULL || !user || is_kernel_vaddr(fault_addr)) {
    //   PANIC("exception validty");
       // printf("user validity\n");
      exit(-1);
   }
-  
-   if(fault_addr > PHYS_BASE - 0x800000 && fault_addr <= thread_current() -> stack_boundary){
-      load_stack_segment(fault_addr, f->esp);
-      return;
-   }
 
-   // 1-1. check swap_out
-   uint8_t *kpage = palloc_get_page(PAL_USER);
-   uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
-   bool writable = true;
-   if (kpage == NULL){
-      reclaim();
-      kpage = palloc_get_page(PAL_USER);
-   }
+   if(not_present){
+      struct thread *t = thread_current();
+      uint32_t *pd = t -> pagedir;
+      uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
+      uint32_t *kpage = falloc(PAL_USER);
 
-   // 1-2. check swap_in
-   struct swap_entry* se = get_swap_entry(thread_current()->pagedir, upage);
-   if(se!=NULL){
-      // printf(">>> 1-2\n");
-      swap_in(kpage, se);
-      goto done;
-   }
+      struct spage_entry *spte = get_spte(pd, upage);
+      struct mmap_entry *me = get_me(pd, upage);
+      struct stack_entry *stke = get_stke(pd, upage);
+      struct swap_entry *se = get_swap_entry(pd, upage);
 
-   // 2-2. check mmap segment
-   struct mmap_entry *me = get_me(fault_addr);
-   if(me != NULL){
-      // printf(">>> 2-2\n");
-      if(!load_mapped_file(me, upage, kpage)){
-         // printf(">>> exit(-1) in 2-2\n");
-         exit(-1);
+      if(spte == NULL && me == NULL && stke == NULL && se == NULL){
+         if(!is_stack(fault_addr, f->esp) && (stke != NULL)){
+            exit(-1);
+         }
+         load_stack_segment(fault_addr);
+         return;
       }
-      goto done;
-   }
-
-   // 2-3. lazy load segment
-   struct spage_entry* spte = get_spte(upage);
-   if(spte != NULL){
-      // printf(">>> 2-3\n");
-      if(!lazy_load_segment(spte, kpage)){
-         // printf(">>> exit(-1) in 2-3\n");
-         exit(-1);
+      if(spte != NULL && se == NULL){
+         if(!lazy_load_segment(spte, kpage)){
+            ffree(spte->upage);
+            exit(-1);
+         }
+         if(!_install_page(spte->upage, kpage, spte->writable)){
+            ffree(spte->upage);
+            exit(-1);
+         }
+         spte -> on_frame = true;
+         return;
       }
-      upage = spte->upage;
-      writable = spte->writable;
-      goto done;
-   }
-   // PANIC("NOT REACHED, page_fault");
-   exit(-1);
-
-done:
-   falloc(kpage, upage);
-   if(!install_page(upage, kpage, writable)){
-      lock_acquire(&swap_lock);
-      pagedir_clear_page(thread_current()->pagedir, upage);
-      palloc_free_page(kpage);
-      lock_release(&swap_lock);
+      if(me != NULL && se == NULL){
+         if(!load_mapped_file(me, kpage)){
+            ffree(me->upage);
+            exit(-1);
+         }
+         if(!_install_page(me->upage, kpage, me->writable)){
+            ffree(me->upage);
+            exit(-1);
+         }
+         me -> on_frame = true;
+         return;
+      }
+      if(se != NULL){
+         swap_in(kpage, se);
+         list_remove(&se->elem);
+         if(!_install_page(se->upage, kpage, se->writable)){
+            ffree(se->upage);
+            exit(-1);
+         }
+         free(se);
+         return;
+      }
+      PANIC("NOT_REACHED, exception");
+   } else
       exit(-1);
-      PANIC("Fail of install_page");
-   }
 }
 
 
@@ -250,8 +238,8 @@ lazy_load_segment (struct spage_entry* spte, uint32_t *kpage){
    return true;
 }
 
-int load_mapped_file(struct mmap_entry *me, uint32_t *upage, uint32_t *kpage){
-   int read_bytes = file_read_at(me -> file, (void *)kpage, PGSIZE, upage - me->start_addr);
+int load_mapped_file(struct mmap_entry *me, uint32_t *kpage){
+   int read_bytes = file_read_at(me -> file, (void *)kpage, PGSIZE, me->upage - me->start_addr);
    if (read_bytes > PGSIZE){
       palloc_free_page (kpage);
       return false;
@@ -261,35 +249,34 @@ int load_mapped_file(struct mmap_entry *me, uint32_t *upage, uint32_t *kpage){
    return true;
 }
 
-void load_stack_segment(uint32_t* fault_addr, void* f_esp){
-   uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
-   uint32_t *f_esp_page = (uint32_t *)((uint32_t)f_esp & 0xfffff000);
-   uint32_t *stack_boundary = thread_current()->stack_boundary;
+void load_stack_segment(uint32_t* fault_addr){
+   uint32_t *kpage = falloc(PAL_USER | PAL_ZERO);
+   struct stack_entry *stke = malloc(sizeof(*stke));
+   if(stke == NULL)
+      return false;
    
-   if(fault_addr < f_esp-4){
-      exit(-1);
+   stke -> pd = thread_current() -> pagedir;
+   stke -> upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
+   stke -> kpage = kpage;
+   stke -> on_frame = true;
+   stke -> swap_disable = false;
+
+   list_push_back(&thread_current()->stack_table, &stke->elem);
+   uint32_t *stack_boundary = thread_current()->stack_boundary;
+
+   if(!install_page(stke->upage, kpage, true)){
+      ffree(stke -> upage);
+      free(stke);
+      return false;
    }
+   return true;
+}
 
-   while(stack_boundary >= f_esp_page){
-         stack_boundary -= PGSIZE/4; 
-         uint8_t *kpage = palloc_get_page(PAL_USER); //kpage and reclaim
-         if(kpage == NULL){
-            reclaim();
-            kpage = palloc_get_page(PAL_USER);
-         }
-
-         struct swap_entry* se = get_swap_entry(thread_current()->pagedir, stack_boundary);
-         if(se!=NULL){
-            swap_in(kpage, se);
-         }
-
-         falloc(kpage, stack_boundary);
-         if(!install_page(stack_boundary, kpage, true)){
-            palloc_free_page(kpage);
-            // exit(-1);
-            PANIC("Fail of install_page");
-         }
-      }
+static bool
+is_stack(uint32_t *fault_addr, void *esp){
+   if(fault_addr >= PHYS_BASE - 0x800000 && fault_addr <= thread_current() -> stack_boundary && fault_addr >= esp - 32)
+      return true;
+   return false;
 }
 
 
