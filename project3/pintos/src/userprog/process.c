@@ -220,10 +220,10 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
-      spt_free();
+      // all_pt_free(pd);
       cur->pagedir = NULL;
       pagedir_activate (NULL);
-      pagedir_destroy (pd);
+      // pagedir_destroy (pd);
     }
   sema_up(&cur->sema_exit);
   sema_down(&cur->sema_mem);
@@ -510,7 +510,8 @@ setup_stack (void **esp)
   if(install_page(upage, kpage, true)){
     *esp = PHYS_BASE;
     struct stack_entry *stke = malloc(sizeof(*stke));
-    stke -> pd = t -> pagedir;
+    // stke -> pd = t -> pagedir;
+    stke->tid = t->tid;
     stke -> upage = upage;
     stke -> kpage = kpage;
     stke -> on_frame = true;

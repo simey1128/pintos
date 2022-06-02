@@ -62,7 +62,6 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  // printf("f->esp: %p\n", f->esp);
   if((f -> esp)>=PHYS_BASE-4) exit(-1);
   switch(*(uint8_t *)(f -> esp)){
     case SYS_HALT:
@@ -142,7 +141,7 @@ get_user (const uint8_t *uaddr)
 }
 
 static bool check_addr(uint8_t* uaddr){
-  if(get_user(uaddr) == -1) exit(-1);
+ if(!is_user_vaddr(uaddr)) exit(-1);
 }
 
 static bool
@@ -167,13 +166,13 @@ void exit(int status){
   int i;
   for(i=3; i<128; i++){
     if(fd_list[i] != NULL){
-      munmap(i);
+      // munmap(i);
       close(i);
     }
   }
-  
   thread_exit();
 }
+
 
 pid_t exec(const char *cmd_line){
   check_addr(cmd_line);
@@ -233,7 +232,7 @@ int read(int fd, void *buffer, unsigned size){
   check_addr(buffer);
   check_addr(buffer+size-1);
   lock_acquire(&filesys_lock);
-  set_swap_disable(buffer, size, true);
+  // set_swap_disable(buffer, size, true);
   if(fd >= 128) return -1;
   int read_value;
   if(fd == 0){
@@ -243,7 +242,7 @@ int read(int fd, void *buffer, unsigned size){
     read_value = file_read(thread_current() -> fd_list[fd], buffer, size);
   }else
     read_value = -1;
-  set_swap_disable(buffer, size, false);
+  // set_swap_disable(buffer, size, false);
   lock_release(&filesys_lock);
   return read_value;
 }
@@ -254,7 +253,7 @@ int write(int fd, const void *buffer, unsigned size){
   if(fd >= 128) return -1;
   int write_value;
   lock_acquire(&filesys_lock);
-  set_swap_disable(buffer, size, true);
+  // set_swap_disable(buffer, size, true);
   if(fd == 1){
     putbuf(buffer, size);
     write_value = size;
@@ -266,7 +265,7 @@ int write(int fd, const void *buffer, unsigned size){
    
   }else
     write_value = -1;
-  set_swap_disable(buffer, size, false);
+  // set_swap_disable(buffer, size, false);
   lock_release(&filesys_lock);
   return write_value;
 }
@@ -296,45 +295,84 @@ mapid_t mmap(int fd, void *addr){
   if(addr > PHYS_BASE - 0x800000) return -1;
   if((uint32_t)addr % PGSIZE != 0) return -1;
   if(addr < (uint32_t*)0x08048000 + thread_current()->read_bytes) return -1;
-  if(get_me(addr) != NULL) return -1;
+  if(get_me(thread_current()->pagedir, addr) != NULL) return -1;
 
 
   struct thread *t = thread_current();
   struct mmap_entry *me = malloc(sizeof(*me));
   me -> mapid = fd;
-  me -> file = file_reopen(t -> fd_list[fd]);
-  me -> file_size = me -> file -> inode -> data.length;
-  me -> start_addr = addr;
 
-  if(me -> file_size == 0) exit(-1);
+  struct file* file = file_reopen(t -> fd_list[fd]);
+  int file_size = file->inode->data.length;
+  if(file_size == 0) exit(-1);
 
-  list_push_back(&t->mmap_table, &me->elem);
+  me_create(fd, file, file_size, addr);
+
 
   return me->mapid;
 }
+
 void munmap(mapid_t mapid){
-  struct list_elem* e = list_begin(&thread_current()->mmap_table);
-  while(e!=list_end(&thread_current()->mmap_table)){
-    struct mmap_entry* me = list_entry(e, struct mmap_entry, elem);
-    if(me->mapid == mapid){
-      lock_acquire(&filesys_lock);
-      write_back(thread_current()->pagedir, me);
-      lock_release(&filesys_lock);
-      list_remove(&me->elem);
-      // free(me);
-    }
-    e = e->next;
-  }
+  int write_value = 0;
+
+   struct list_elem* e = list_begin(&thread_current()->mmap_table);
+   while(e != list_end(&thread_current()->mmap_table)){
+       struct mmap_entry* me = list_entry(e, struct mmap_entry, elem);
+       if(me->mapid == mapid){ //write back
+           uint32_t *start_pg = (uint32_t)me->start_addr & 0xfffff000;
+           write_value += file_write_at(me->file, me->upage, PGSIZE, me->upage-start_pg);
+           
+           list_remove(&me->elem);
+           pagedir_clear_page(me->pd, me->upage);
+           palloc_free_page(me->kpage);
+           
+       }
+       e = e->next;
+   }
 }
 
-void
-set_swap_disable(void *buffer, int size, bool value){
-  struct list_elem *e = list_begin(&frame_table);
-  while(e != list_end(&frame_table)){
-    struct frame_entry *fte = list_entry(e, struct frame_entry, elem);
-    if(fte->upage >= buffer && fte->upage < buffer + size){
-      fte->swap_disable = value;
-    }
-    e = list_next(e);
-  }
+
+
+void set_swap_disable(void* buffer, int size, bool value){
+
+    struct list_elem* e= list_begin(&thread_current()->mmap_table);
+    while(e != list_end(&thread_current()->spage_table)){
+      printf("in while\n");
+        struct spage_entry* spte = list_entry(e, struct spage_entry, elem);
+        printf("after making entry\n");
+        printf("spte->upage: %p\n", spte->upage);
+        if(spte->upage >= buffer && spte->upage < buffer+size){
+          printf("hihi\n");
+            spte->swap_disable = value;
+            return;
+        }
+
+        e = e->next;
+    }   
+
+    e = list_begin(&thread_current()->mmap_table);
+    printf("before mmap_table iteration\n");
+    while(e != list_end(&thread_current()->mmap_table)){
+        struct mmap_entry* me = list_entry(e, struct mmap_entry, elem);
+        if(me->upage >= buffer && me->upage < buffer+size){
+            me->swap_disable = value;
+            return;
+        }
+
+        e = e->next;
+    } 
+
+    e = list_begin(&thread_current()->stack_table);
+    printf("before stack_table iteration\n");
+    while(e != list_end(&thread_current()->stack_table)){
+        struct stack_entry* stke = list_entry(e, struct stack_entry, elem);
+        if(stke->upage >= buffer && stke->upage < buffer+size){
+            stke->swap_disable = value;
+            return;
+        }
+        
+        e = e->next;
+    } 
+
+    PANIC("NOT_REACHED, reclaim");
 }

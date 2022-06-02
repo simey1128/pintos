@@ -48,6 +48,7 @@
         "filesys.h": "c",
         "block.h": "c",
         "bitmap.h": "c",
-        "list.h": "c"
+        "list.h": "c",
+        "palloc.h": "c"
     }
 }

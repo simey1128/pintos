@@ -161,7 +161,9 @@ page_fault (struct intr_frame *f)
 
    // 0. user validity
   if(fault_addr==NULL || !user || is_kernel_vaddr(fault_addr)) {
-   //   PANIC("exception validty");
+   //   printf("fault_addr: %p\n", fault_addr);
+     printf("user: %d\n", user);
+     PANIC("exception validty");
       // printf("user validity\n");
      exit(-1);
   }
@@ -189,7 +191,7 @@ page_fault (struct intr_frame *f)
             ffree(spte->upage);
             exit(-1);
          }
-         if(!_install_page(spte->upage, kpage, spte->writable)){
+         if(!install_page(spte->upage, kpage, spte->writable)){
             ffree(spte->upage);
             exit(-1);
          }
@@ -201,7 +203,7 @@ page_fault (struct intr_frame *f)
             ffree(me->upage);
             exit(-1);
          }
-         if(!_install_page(me->upage, kpage, me->writable)){
+         if(!install_page(me->upage, kpage, me->writable)){
             ffree(me->upage);
             exit(-1);
          }
@@ -211,7 +213,7 @@ page_fault (struct intr_frame *f)
       if(se != NULL){
          swap_in(kpage, se);
          list_remove(&se->elem);
-         if(!_install_page(se->upage, kpage, se->writable)){
+         if(!install_page(se->upage, kpage, se->writable)){
             ffree(se->upage);
             exit(-1);
          }
@@ -228,9 +230,12 @@ page_fault (struct intr_frame *f)
 int
 lazy_load_segment (struct spage_entry* spte, uint32_t *kpage){
    file_seek (spte->file, spte->ofs);
+   spte->kpage = kpage;
+
    if (file_read (spte->file, kpage, spte->read_bytes) != (int) spte->read_bytes)
    {
       // palloc_free_page (kpage);
+
       return false; 
    }
    memset (kpage + spte->read_bytes, 0, spte->zero_bytes);
@@ -240,6 +245,8 @@ lazy_load_segment (struct spage_entry* spte, uint32_t *kpage){
 
 int load_mapped_file(struct mmap_entry *me, uint32_t *kpage){
    int read_bytes = file_read_at(me -> file, (void *)kpage, PGSIZE, me->upage - me->start_addr);
+   me->kpage = kpage;
+
    if (read_bytes > PGSIZE){
       palloc_free_page (kpage);
       return false;
@@ -250,7 +257,9 @@ int load_mapped_file(struct mmap_entry *me, uint32_t *kpage){
 }
 
 void load_stack_segment(uint32_t* fault_addr){
-   uint32_t *kpage = falloc(PAL_USER | PAL_ZERO);
+
+   uint32_t *kpage = falloc(PAL_USER);
+   
    struct stack_entry *stke = malloc(sizeof(*stke));
    if(stke == NULL)
       return false;

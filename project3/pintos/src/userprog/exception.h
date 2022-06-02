@@ -12,6 +12,6 @@ void exception_print_stats (void);
 
 int lazy_load_segment (struct spage_entry*, uint32_t *);
 int load_mapped_file(struct mmap_entry *, uint32_t *);
-void load_stack_segment(uint32_t * , void*);
+void load_stack_segment(uint32_t *);
 
 #endif /* userprog/exception.h */

@@ -23,7 +23,7 @@ struct frame_entry{
 
 struct list frame_table;
 
-uint32_t *falloc(enum palloc_flags);
+uint32_t *falloc(int);
 void ffree(uint32_t *);
 
 #endif

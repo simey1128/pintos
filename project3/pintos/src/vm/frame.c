@@ -6,7 +6,6 @@
 #include "threads/vaddr.h"
 
 #include "debug.h"
-
 #include "threads/palloc.h"
 
 
@@ -14,13 +13,13 @@
 
 static fid_t allocate_fid(void);
 
-uint32_t
-*falloc(enum palloc_flags flag){
+uint32_t* 
+falloc(int flag){
     lock_acquire(&swap_lock);
-    uint8_t *kpage = palloc_get_page(flag);
+    uint32_t *kpage = palloc_get_page(PAL_USER);
     while(kpage == NULL){
-        reclame();
-        kpage = palloc_get_page(flag);
+        reclaim();
+        kpage = palloc_get_page(PAL_USER);
     }
     lock_release(&swap_lock);
     return kpage;
