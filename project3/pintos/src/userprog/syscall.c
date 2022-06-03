@@ -292,33 +292,51 @@ mapid_t mmap(int fd, void *addr){
   if(addr > PHYS_BASE - 0x800000) return -1;
   if((uint32_t)addr % PGSIZE != 0) return -1;
   if(addr < (uint32_t*)0x08048000 + thread_current()->read_bytes) return -1;
-  if(get_me(addr) != NULL) return -1;
-
+  if(get_vte(addr) != NULL) return -1;   // TODO
 
   struct thread *t = thread_current();
-  struct mmap_entry *me = malloc(sizeof(*me));
-  me -> mapid = fd;
-  me -> file = file_reopen(t -> fd_list[fd]);
-  me -> file_size = me -> file -> inode -> data.length;
-  me -> start_addr = addr;
+  mapid_t mapid = fd;
+  struct file *file = file_reopen(t -> fd_list[fd]);
+  int read_bytes = file_length(file);
+  int ofs = 0;
+  while(read_bytes > 0){
+    size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+    size_t page_zero_bytes = PGSIZE - page_read_bytes;
+    struct vpage_entry *vte = malloc(sizeof(*vte));
+    vte -> type = MAP_PAGE;
+    vte -> vaddr = addr;
+    vte -> upage = (uint32_t *)((uint32_t)addr & 0xfffff000);;
+    vte -> writable = true;
+    vte -> on_frame = false;
+    vte -> swap_disable = false;
 
-  if(me -> file_size == 0) exit(-1);
+    vte -> fd = fd;
+    vte -> file = file;
+    vte -> read_bytes = page_read_bytes;
+    vte -> zero_bytes = page_zero_bytes;
 
-  list_push_back(&t->mmap_table, &me->elem);
+    list_push_back(&t -> vpage_table, &vte->elem);
 
-  return me->mapid;
+    read_bytes -= page_read_bytes;
+    ofs += page_read_bytes;
+    addr += PGSIZE;
+  }
+
+  return mapid;
 }
+
 void munmap(mapid_t mapid){
-  struct list_elem* e = list_begin(&thread_current()->mmap_table);
-  while(e!=list_end(&thread_current()->mmap_table)){
-    struct mmap_entry* me = list_entry(e, struct mmap_entry, elem);
-    if(me->mapid == mapid){
+  struct thread *t = thread_current();
+  struct list_elem* e = list_begin(&t->vpage_table);
+  while(e!=list_end(&t->vpage_table)){
+    struct vpage_entry* vte = list_entry(e, struct vpage_entry, elem);
+    if(vte->type == MAP_PAGE && vte->fd == mapid){
       lock_acquire(&filesys_lock);
-      write_back(thread_current()->pagedir, me);
+      write_back(t->pagedir, vte);
       lock_release(&filesys_lock);
-      list_remove(&me->elem);
+      list_remove(&vte->elem);
       // free(me);
-    }
+  }
     e = e->next;
   }
 }

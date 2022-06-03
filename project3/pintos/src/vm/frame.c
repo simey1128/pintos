@@ -14,32 +14,25 @@
 
 static fid_t allocate_fid(void);
 
-void
-falloc(uint32_t *kpage, uint32_t *upage){
+uint32_t *kalloc(int flag){
     lock_acquire(&swap_lock);
-    struct frame_entry *e = malloc(sizeof *e);
-    e -> pd = thread_current() -> pagedir;
-    e -> upage = upage;
-    e -> kpage = kpage;
-
-    list_push_back(&frame_table, &e->elem);
+    uint32_t *kpage = palloc_get_page(flag);
+    while(kpage == NULL){
+        reclaim();
+        kpage = palloc_get_page(flag);
+    }
     lock_release(&swap_lock);
+    return kpage;
 }
 
-void
-ffree(uint32_t *kpage){
+void kfree(uint32_t *upage){
     lock_acquire(&swap_lock);
-    struct list_elem *e = list_begin(&frame_table);
-    while(e != list_end(&frame_table)){
-        struct frame_entry *f = list_entry(e, struct frame_entry, elem);
-        if(f -> kpage == kpage){
-            list_remove(&f->elem);
-            pagedir_clear_page(f->pd, f->upage);
-            // palloc_free_page(f->kpage);
-            // free(f);
-            break;
-        }
-        e = e->next;
-    }
+    struct thread *t = thread_current();
+    struct list_elem *e = list_begin(&t -> vpage_table);
+    struct vpage_entry *vte = get_vte(upage);
+    list_remove(&vte->elem);
+    pagedir_clear_page(t -> pagedir, upage);
+    palloc_free_page(pagedir_get_page(t -> pagedir, upage));
+    // free(vte);
     lock_release(&swap_lock);
 }

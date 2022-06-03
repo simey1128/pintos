@@ -98,7 +98,6 @@ struct thread
     /* Owned by userprog/process.c. */
 #ifdef USERPROG
    uint32_t *pagedir;                  /* Page directory. */
-   struct list mmap_table;
    struct semaphore sema_exit;
    struct semaphore sema_mem;
    struct semaphore sema_load;
@@ -114,7 +113,7 @@ struct thread
    unsigned magic;                     /* Detects stack overflow. */
 
    struct file *current_file;
-   struct list spage_table;
+   struct list vpage_table;
    void* stack_boundary;
    uint32_t read_bytes;
   };

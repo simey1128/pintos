@@ -18,6 +18,7 @@ static long long page_fault_cnt;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
+static bool is_stack(uint32_t *fault_addr, void *esp);
 static bool
 install_page (void *upage, void *kpage, bool writable);
 
@@ -132,128 +133,95 @@ kill (struct intr_frame *f)
 static void
 page_fault (struct intr_frame *f) 
 {
-  bool not_present;  /* True: not-present page, false: writing r/o page. */
-  bool write;        /* True: access was write, false: access was read. */
-  bool user;         /* True: access by user, false: access by kernel. */
-  void *fault_addr;  /* Fault address. */
+   bool not_present;  /* True: not-present page, false: writing r/o page. */
+   bool write;        /* True: access was write, false: access was read. */
+   bool user;         /* True: access by user, false: access by kernel. */
+   void *fault_addr;  /* Fault address. */
 
-  /* Obtain faulting address, the virtual address that was
-     accessed to cause the fault.  It may point to code or to
-     data.  It is not necessarily the address of the instruction
-     that caused the fault (that's f->eip).
-     See [IA32-v2a] "MOV--Move to/from Control Registers" and
-     [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
-     (#PF)". */
-  asm ("movl %%cr2, %0" : "=r" (fault_addr));
+   /* Obtain faulting address, the virtual address that was
+      accessed to cause the fault.  It may point to code or to
+      data.  It is not necessarily the address of the instruction
+      that caused the fault (that's f->eip).
+      See [IA32-v2a] "MOV--Move to/from Control Registers" and
+      [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
+      (#PF)". */
+   asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
-  /* Turn interrupts back on (they were only off so that we could
-     be assured of reading CR2 before it changed). */
-  intr_enable ();
+   /* Turn interrupts back on (they were only off so that we could
+      be assured of reading CR2 before it changed). */
+   intr_enable ();
 
-  /* Count page faults. */
-  page_fault_cnt++;
+   /* Count page faults. */
+   page_fault_cnt++;
 
-  /* Determine cause. */
-  not_present = (f->error_code & PF_P) == 0;
-  write = (f->error_code & PF_W) != 0;
-  user = (f->error_code & PF_U) != 0;
+   /* Determine cause. */
+   not_present = (f->error_code & PF_P) == 0;
+   write = (f->error_code & PF_W) != 0;
+   user = (f->error_code & PF_U) != 0;
 
-  if(!not_present){
+   if(fault_addr==NULL || !user || is_kernel_vaddr(fault_addr)) {
+      exit(-1);
+   }
+
+   if(!not_present){
      exit(-1);
-  }
+   }
+   struct vpage_entry *vte = get_vte(fault_addr);
+   uint32_t *kpage = kalloc(PAL_USER);
+   if(vte == NULL){
+      if(is_stack(fault_addr, f->esp)){
+         load_stack_segment(fault_addr, f->esp);
+         return;
+      }
+      exit(-1);
+   }
 
-/* FOR DEBUGING!!! */
-//   printf("fault_addr: %p\n", fault_addr);
-//   if(fault_addr==NULL) printf("fault_addr==NULL\n");
-//   if(!user) printf("!user, fault_addr: %p\n", fault_addr);
-//   if(is_kernel_vaddr(fault_addr)) printf("is_kernel_vaddr(fault_addr)\n");
+   if(vte->type == SUP_PAGE){
+      if(!lazy_load_segment(kpage, vte)){
+         kfree(kpage);
+         exit(-1);
+      }
+   }
+   if(vte->type == MAP_PAGE){
+      if(!load_mapped_file(kpage, vte)){
+         kfree(kpage);
+         exit(-1);
+      }
+   }
+   if(vte->type == REM_PAGE){
+      swap_in(kpage, thread_current()->pagedir, vte);
+   }
 
-   // 0. user validity
-  if(fault_addr==NULL || !user || is_kernel_vaddr(fault_addr)) {
-   //   PANIC("exception validty");
-      // printf("user validity\n");
-     exit(-1);
-  }
+   if(!install_page(vte->vaddr, kpage, vte->writable)){
+      kfree(kpage);
+      exit(-1);
+   }
+   vte -> on_frame = true;
+   return;
   
    if(fault_addr > PHYS_BASE - 0x800000 && fault_addr <= thread_current() -> stack_boundary){
       load_stack_segment(fault_addr, f->esp);
       return;
-   }
-
-   // 1-1. check swap_out
-   uint8_t *kpage = palloc_get_page(PAL_USER);
-   uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
-   bool writable = true;
-   if (kpage == NULL){
-      // lock_acquire(&swap_lock);
-      reclaim();
-      kpage = palloc_get_page(PAL_USER);
-      // lock_release(&swap_lock);
-   }
-
-   // 1-2. check swap_in
-   struct swap_entry* se = get_swap_entry(thread_current()->pagedir, upage);
-   if(se!=NULL){
-      // printf(">>> 1-2\n");
-      swap_in(kpage, se);
-      goto done;
-   }
-
-   // 2-2. check mmap segment
-   struct mmap_entry *me = get_me(fault_addr);
-   if(me != NULL){
-      // printf(">>> 2-2\n");
-      if(!load_mapped_file(me, upage, kpage)){
-         // printf(">>> exit(-1) in 2-2\n");
-         exit(-1);
-      }
-      goto done;
-   }
-
-   // 2-3. lazy load segment
-   struct spage_entry* spte = get_spte(upage);
-   if(spte != NULL){
-      // printf(">>> 2-3\n");
-      if(!lazy_load_segment(spte, kpage)){
-         // printf(">>> exit(-1) in 2-3\n");
-         exit(-1);
-      }
-      upage = spte->upage;
-      writable = spte->writable;
-      goto done;
-   }
-   // PANIC("NOT REACHED, page_fault");
-   exit(-1);
-
-done:
-   falloc(kpage, upage);
-   if(!install_page(upage, kpage, writable)){
-      lock_acquire(&swap_lock);
-      pagedir_clear_page(thread_current()->pagedir, upage);
-      palloc_free_page(kpage);
-      lock_release(&swap_lock);
-      exit(-1);
-      PANIC("Fail of install_page");
    }
 }
 
 
 
 int
-lazy_load_segment (struct spage_entry* spte, uint32_t *kpage){
-   file_seek (spte->file, spte->ofs);
-   if (file_read (spte->file, kpage, spte->read_bytes) != (int) spte->read_bytes)
+lazy_load_segment (struct vpage_entry* vte, uint32_t *kpage){
+   file_seek (vte->file, vte->ofs);
+   if (file_read (vte->file, kpage, vte->read_bytes) != (int) vte->read_bytes)
    {
       // palloc_free_page (kpage);
       return false; 
    }
-   memset (kpage + spte->read_bytes, 0, spte->zero_bytes);
+   memset (kpage + vte->read_bytes, 0, vte->zero_bytes);
 
    return true;
 }
 
-int load_mapped_file(struct mmap_entry *me, uint32_t *upage, uint32_t *kpage){
-   int read_bytes = file_read_at(me -> file, (void *)kpage, PGSIZE, upage - me->start_addr);
+int load_mapped_file(struct vpage_entry *vte, uint32_t *kpage){
+   int read_bytes = file_read_at(vte -> file, (void *)kpage, vte->read_bytes, vte->ofs);
    if (read_bytes > PGSIZE){
       palloc_free_page (kpage);
       return false;
@@ -267,33 +235,36 @@ void load_stack_segment(uint32_t* fault_addr, void* f_esp){
    uint32_t *upage = (uint32_t *)((uint32_t)fault_addr & 0xfffff000);
    uint32_t *f_esp_page = (uint32_t *)((uint32_t)f_esp & 0xfffff000);
    uint32_t *stack_boundary = thread_current()->stack_boundary;
+   struct thread *t = thread_current();
    
    if(fault_addr < f_esp-4){
       exit(-1);
    }
 
-   while(stack_boundary >= f_esp_page){
-         stack_boundary -= PGSIZE/4; 
-         uint8_t *kpage = palloc_get_page(PAL_USER); //kpage and reclaim
-         if(kpage == NULL){
-            reclaim();
-            kpage = palloc_get_page(PAL_USER);
-         }
+   uint32_t *kpage = kalloc(PAL_USER | PAL_ZERO);
+   struct vpage_entry *vte = malloc(sizeof(*vte));
+   
+   vte -> type = REM_PAGE;
+   vte -> vaddr = fault_addr;
+   vte -> upage = upage;
+   vte -> writable = true;
+   vte -> on_frame = true;
+   vte -> swap_disable = false;
 
-         struct swap_entry* se = get_swap_entry(thread_current()->pagedir, stack_boundary);
-         if(se!=NULL){
-            swap_in(kpage, se);
-         }
+   list_push_back(&t -> vpage_table, &vte->elem);
 
-         falloc(kpage, stack_boundary);
-         if(!install_page(stack_boundary, kpage, true)){
-            palloc_free_page(kpage);
-            // exit(-1);
-            PANIC("Fail of install_page");
-         }
-      }
+   if(!install_page(upage, kpage, true)){
+      kfree(vte->upage);
+      // free(vte);
+      exit(-1);
+   }
 }
 
+static bool is_stack(uint32_t *fault_addr, void *esp){
+   if(fault_addr >= PHYS_BASE - 0x800000 && fault_addr <= thread_current() -> stack_boundary && fault_addr >= esp - 32)
+      return true;
+   return false;
+}
 
 
 static bool

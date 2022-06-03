@@ -24,7 +24,7 @@ struct frame_entry{
 
 struct list frame_table;
 
-void falloc(uint32_t *, uint32_t *);
-void ffree(uint32_t *);
+uint32_t *kalloc(int);
+void kfree(uint32_t *);
 
 #endif

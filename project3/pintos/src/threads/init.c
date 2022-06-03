@@ -104,7 +104,7 @@ main (void)
   malloc_init ();
   paging_init ();
 #ifdef VM
-  list_init(&frame_table);
+  list_init(&swap_table);
 #endif
 
   /* Segmentation. */

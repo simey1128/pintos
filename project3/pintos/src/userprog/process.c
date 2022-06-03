@@ -219,7 +219,7 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
-      spt_free();
+      vt_free();
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
@@ -405,8 +405,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
-                thread_current()->read_bytes = read_bytes;
-              spte_create(file, file_page, (void *)mem_page, read_bytes, zero_bytes, writable);
+                if (!vte_create (file, file_page, (void *) mem_page,
+									   read_bytes, zero_bytes, writable))
+						      goto done;
             }
           else
             goto done;
@@ -500,21 +501,27 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 static bool
 setup_stack (void **esp) 
 {
-  uint8_t *kpage;
+  uint32_t *kpage;
   bool success = false;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-        *esp = PHYS_BASE;
-      else
-        palloc_free_page (kpage);
-    }
-  falloc(kpage, ((uint8_t *) PHYS_BASE) - PGSIZE);
-  thread_current()->stack_boundary = ((uint8_t *) PHYS_BASE) - PGSIZE;
-  return success;
+  kpage = kalloc(PAL_USER | PAL_ZERO);
+  if(install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true)){
+    struct vpage_entry *vte = malloc(sizeof(*vte));
+    vte -> type = REM_PAGE;
+    vte -> vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
+    vte -> kpage = kpage;
+    vte -> writable = true;
+    vte -> on_frame = true;
+    vte -> swap_disable = false;
+    
+    list_push_back(&thread_current()->vpage_table, &vte->elem);
+    *esp = PHYS_BASE;
+    thread_current()->stack_boundary = ((uint8_t *) PHYS_BASE) - PGSIZE;
+    return true;
+  }else{
+    palloc_free_page (kpage);
+    return false;
+  }
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
