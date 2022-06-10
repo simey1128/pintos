@@ -1,110 +1,138 @@
 #include "filesys/buffer-cache.h"
 #include "filesys/filesys.h"
+#include <string.h>
 
-void init_buffer_cache(){
+static uint8_t *buffer_cache;
+
+static struct bc_entry* bc_table[BUFFER_CACHE_SIZE];
+static struct lock bc_table_lock;
+
+void buffer_cache_init(){
+    buffer_cache = (uint8_t*)malloc(sizeof(uint8_t) * 64 * BLOCK_SECTOR_SIZE);
+
+    lock_init(&bc_table_lock);
     int i;
-    for(i=0; i<BUFFER_LIST_SIZE; i++){
-        buffer_list[i] = NULL;
-        buffer_list[i]->cache = (uint8_t*)malloc(sizeof(uint8_t*)*BLOCK_SECTOR_SIZE);
-        lock_init(&buffer_list[i]->lock);
+    for(i=0; i<BUFFER_CACHE_SIZE; i++){
+        struct bc_entry* bce = malloc(sizeof(*bce));
+
+        bce->cache = buffer_cache + i * BLOCK_SECTOR_SIZE;
+        lock_init(&bce->lock);
+        bc_table[i] = bce;
     }
 }
-/*
-buffer_list에서 sector위치에 있는 buffer_entry 반환
-* invalid sector는 sector<0 or buffer_list[sector]가 비어있을 때
-* sector가 BUFFER_LIST_SIZE 이상이면, select victim, replace entry
-* 그렇지 않으면 buffer_list[sector] 반환
-*/
-struct buffer_entry* get_buffer_entry(block_sector_t sector){
-    
-    // buffer_list에 존재하는지 확인
+
+struct bc_entry* get_bc_entry(block_sector_t sector){
+    lock_acquire(&bc_table_lock);
+    // buffer_cache_table에 존재하는지 확인
     int i;
-    for(i=0; i<BUFFER_LIST_SIZE; i++){
-        struct buffer_entry* be = buffer_list[i];
-        if(be->sector == sector) return be;
-    }
-
-    // buffer_list에 없으며, entry를 새로 만들어야함
-    for(i=0; i<BUFFER_LIST_SIZE; i++){
-        if(buffer_list[i] == NULL){
-            struct buffer_entry* be = buffer_list[i];
-            set_buffer_entry(be, sector, i);
-
-            return be;
+    for(i=0; i<BUFFER_CACHE_SIZE; i++){
+        struct bc_entry* bce = bc_table[i];
+        if(bce->sector == sector){
+            lock_release(&bc_table_lock);
+            return bce;
         }
     }
 
-    // buffer_list가 꽉차서 entry를 replace해야함
-    return replace_buffer_entry(sector);    
+    // buffer_cache_table에 없으며, entry를 새로 만들어야함
+    for(i=0; i<BUFFER_CACHE_SIZE; i++){
+        if(bc_table[i] == NULL){
+            struct bc_entry* bce = bc_table[i];
+            set_bc_entry(bce, sector);
+            lock_release(&bc_table_lock);
+            return bce;
+        }
+    }
+
+    // buffer_cache_table가 꽉차서 entry를 replace해야함
+    lock_release(&bc_table_lock);
+    return replace_bc_entry(sector);    
 }
 
 void buffer_read(block_sector_t idx, void* _buffer, off_t bytes_read, off_t size, off_t offset){
-    struct buffer_entry* be = get_buffer_entry(idx);
-    lock_acquire(&be->lock);
+    struct bc_entry* bce = get_bc_entry(idx);
+    if(bce->new){
+        lock_acquire(&bce->lock);
 
-    block_read(fs_device, idx, be->cache);
-    memcpy(_buffer+bytes_read, be->cache + offset, size);
+        block_read(fs_device, idx, bce->cache);
+        bce->new=0;
+        lock_release(&bce->lock);
+    }
+    
+    lock_acquire(&bce->lock);
 
-    be->last_clock = timer_ticks();
-    lock_release(&be->lock);
+    memcpy(_buffer+bytes_read, bce->cache + offset, size);
+
+    bce->last_clock = timer_ticks();
+    lock_release(&bce->lock);
 }
 
 void buffer_write(block_sector_t idx, void* buffer_, off_t bytes_written, off_t size, off_t offset){
-    struct buffer_entry* be = get_buffer_entry(idx);
-    lock_acquire(&be->lock);
+    struct bc_entry* bce = get_bc_entry(idx);
 
-    block_write(fs_device, idx, be->cache);
-    memcpy(be->cache+offset , buffer_ + bytes_written, size);
+    lock_acquire(&bce->lock);
+    if(bce->new){
+        block_write(fs_device, idx, bce->cache);
+        bce->new=0;
+    }
+    
+    memcpy(bce->cache+offset , buffer_ + bytes_written, size);
 
-    be->last_clock = timer_ticks();
-    be->dirty = 1;
-    lock_release(&be->lock);
+    bce->last_clock = timer_ticks();
+    bce->dirty = 1;
+    lock_release(&bce->lock);
 }
 
-struct buffer_entry* replace_buffer_entry(block_sector_t sector){
-    int i, victim_idx;
-    struct buffer_entry* victim_be = NULL;
+struct bc_entry* replace_bc_entry(block_sector_t sector){
+    struct bc_entry* victim_be = get_oldest_bc_entry();
 
-    for(i=0; i<BUFFER_LIST_SIZE; i++){
-        struct buffer_entry* target_be = buffer_list[i];
+    if(victim_be->dirty) flush_bc_entry(victim_be);
+    set_bc_entry(victim_be, sector);
 
-        if(victim_be == NULL || target_be->last_clock < victim_be->last_clock){
-            victim_be = target_be;
-            victim_idx = i;
-        }
-    }
-
-    lock_acquire(&victim_be->lock);
-    if(victim_be->dirty) flush_buffer_entry(victim_be);
-    set_buffer_entry(victim_be, sector, victim_idx);
-
-    lock_release(&victim_be->lock);
     return victim_be;
 }
 
-void flush_buffer_entry(struct buffer_entry* be){
-    block_write(fs_device, be->sector, be->cache);
-    be->dirty = 0;
-    be->last_clock = timer_ticks();
-}
-
-void set_buffer_entry(struct buffer_entry* be, block_sector_t sector, int idx){
-    be->inode = inode_open(sector);
-    be->sector = sector;
-    be->dirty = 0;
-    be->last_clock = timer_ticks();
-}
-
-void free_buffer(){
+struct bc_entry* get_oldest_bc_entry(){
+    lock_acquire(&bc_table_lock);
     int i;
-    for(i=0; i<BUFFER_LIST_SIZE; i++){
-        struct buffer_entry* be = buffer_list[i];
-        lock_acquire(&be->lock);
-        if(be->dirty){
-            flush_buffer_entry(be);
+    struct bc_entry* victim_be = NULL;
+
+    for(i=0; i<BUFFER_CACHE_SIZE; i++){
+        struct bc_entry* target_be = bc_table[i];
+
+        if(victim_be == NULL || target_be->last_clock < victim_be->last_clock){
+            victim_be = target_be;
         }
-        free(be->cache);
-        lock_release(&be->lock);
-        buffer_list[i] = NULL;
+    }
+    lock_release(&bc_table_lock);
+    return victim_be;
+}
+
+void flush_bc_entry(struct bc_entry* bce){
+    lock_acquire(&bce->lock);
+    block_write(fs_device, bce->sector, bce->cache);
+    bce->dirty = 0;
+    bce->last_clock = timer_ticks();
+    lock_release(&bce->lock);
+}
+
+void set_bc_entry(struct bc_entry* bce, block_sector_t sector){
+    lock_acquire(&bce->lock);
+    bce->inode = inode_open(sector);
+    bce->sector = sector;
+    bce->dirty = 0;
+    bce->last_clock = timer_ticks();
+    bce->new = 1;
+    lock_release(&bce->lock);
+}
+
+void buffer_cache_free(){
+    int i;
+    for(i=0; i<BUFFER_CACHE_SIZE; i++){
+        struct bc_entry* bce = bc_table[i];
+        if(bce->dirty){
+            flush_bc_entry(bce);
+        }
+        free(bce);
+        bc_table[i] = NULL;
     }
 }
