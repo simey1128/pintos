@@ -1,0 +1,345 @@
+                    +---------------------------+
+        |   CS 140    |
+        | PROJECT 3: VIRTUAL MEMORY |
+        |    DESIGN DOCUMENT  |
+        +---------------------------+
+
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+
+Eunyoung Sim <simey1128@unist.ac.kr>
+Jaeeun Eom <eomjaeeun@unist.ac.kr>
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+      PAGE TABLE MANAGEMENT
+      =====================
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+
+typedef int mapid_t;
+-> type definition of mapid_t.
+
+struct spage_entry{
+    uint32_t *upage;
+
+    struct file *file;
+    off_t ofs;
+    uint32_t read_bytes;
+    uint32_t zero_bytes;
+    bool writable;
+
+    struct list_elem elem;
+};
+-> A struct that stores information about the supplementary page table entry.
+
+typedef uint32_t fid_t;
+
+struct frame_entry{
+    uint32_t *pd;
+    uint32_t *upage;
+    uint32_t *kpage;
+
+    bit accessed;
+    bit dirty;
+
+    struct list_elem elem;
+};
+-> A struct that stores information about the frame table entry.
+
+struct list frame_table;
+-> A frame table represented as a list
+
+struct thread{
+      struct list spage_table;
+}
+-> A supplementary page table represented as a list
+
+
+---- ALGORITHMS ----
+
+>> A2: In a few paragraphs, describe your code for locating the frame,
+>> if any, that contains the data of a given page.
+
+About locating frame, there are several representative issues.
+First, allocate free frame (mapping between virtual page and free frame).
+We manage frames with frame_table. each table entry contains metadata.
+remarkable members are vpage, upage and pd.
+vpage indicates kernel virtual page mapped to frame.
+upage indicate user virtual page looking for frame.
+Pd indicates current owner of frame. Because value of pd is unique between processes, we can distinguish owner.
+
+Second, swap out existing frame.
+when physical memory space for process is full, existing frame need to be swapped out.
+To swap out frame, we made reclaim() function which is using second chance algorithm.
+If one page is not dirty and not accessed, frame will be swapped out immediately through swap_out().
+
+Third is swap in frame data from disk to frame(physical memory).
+when page fault occurs, we must clarify that page fault means 'not in memory and not in swap disk' or 'not in memory but in swap disk'.
+when page fault is due to latter one, we need to swap in frame corresponding to user virtual page of fault address.
+swap_in() function does it.
+
+Last, free existing frame.
+when process exits or frame swaps out, free existing frame is needed.
+we use palloc_free_page(kpage) in those procedure. Then frame will be cleared from memory and we can make new free frame.
+
+>> A3: How does your code coordinate accessed and dirty bits between
+>> kernel and user virtual addresses that alias a single frame, or
+>> alternatively how do you avoid the issue?
+
+We only allow accesses to user virtual address coming from user.
+We thought that it was definite and simple way to handle given situation.
+
+---- SYNCHRONIZATION ----
+
+>> A4: When two user processes both need a new frame at the same time,
+>> how are races avoided?
+
+In page_fault, we get a kernel virtual page(which is mapped to frame one to one) throgh falloc().
+in falloc(), we use palloc_get_page(PAL_USER) to get a new free frame. Because there can be no free frame,
+we use reclaim() to swap out existing one non-free frame.
+
+During this procedure, several user process can access it simultaneously. 
+Because handling frame is critical section, we set a lock to prevent race condition.
+we set lock_acquire(&swap_lock) at the very start of the falloc() to allow only one access at the same time.
+process can release lock when it finish the execution of falloc() at the end of the function.
+
+---- RATIONALE ----
+
+>> A5: Why did you choose the data structure(s) that you did for
+>> representing virtual-to-physical mappings?
+
+The virtual-to-physical mapping is implemented in frame_table.
+If mapping is well done, it will be free to get physical address through virtual address or vice versa.
+So, frame_entry has upage and kpage member variables, so we can refer to both freely.
+
+
+           PAGING TO AND FROM DISK
+           =======================
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+
+struct lock swap_lock;
+struct swap_entry{
+    uint32_t *pd;
+    uint32_t *upage;
+
+    block_sector_t sector;
+    struct list_elem elem;
+};
+-> A struct to store information of swapped page entries.
+
+struct list swap_table;
+-> A list to store swapped out page entries.
+
+struct block *swap_disk;
+-> A variable to store swap disk.
+
+struct bitmap *swap_bitmap;
+-> A struct needed to find free space on swap disk.
+
+---- ALGORITHMS ----
+
+>> B2: When a frame is required but none is free, some frame must be
+>> evicted.  Describe your code for choosing a frame to evict.
+
+we used second chance algorithm to choose a frame to evict.
+condition for victim frame is 'it is not dirty and not accessed'. we can know that information through pagedir_is_*() function.
+when victim frame is found, we call swap_out() and we can get new free frame.
+
+when frame is dirty(dirty bit is true), it should be written back to disk to guarantee correctness of data between disk and memory.
+we use file_write_at() to achieve it. after write back, we set dirty bit to false.
+
+After all the handling for specific bit conditions are finished,
+its accessed bit should be set to false. Because we use second chance algorithm.
+For that, in every end of iteration, we set the accessed bit to false.
+
+>> B3: When a process P obtains a frame that was previously used by a
+>> process Q, how do you adjust the page table (and any other data
+>> structures) to reflect the frame Q no longer has?
+
+The meaning of 'P obtains frame that was previously used by Q' is P found victim frame for swpping out which is previously used by Q.
+To prevent given situation, at the end of the reclaim(), we do 'pagedir_clear_page(pagedir)' pagedir of Q. 
+through this, present bit of page table entry mapped to that frame is set to false. 
+so we can guarantee that Q no longer has that frame.
+
+>> B4: Explain your heuristic for deciding whether a page fault for an
+>> invalid virtual address should cause the stack to be extended into
+>> the page that faulted.
+
+To ensure fault address is for stack growth, we checked that address is within specific region.
+By manual, size of user stack in user virtual space is 8MB. 
+That means fault address should be same or larger than 'PHYS_BASE - 0x800000' and same or smaller that current user stack pointer.
+If fault address is in it, we can say that fault address is for stack.
+and through pt-grow-* tests, we found that fault address in that region and same or larger than f->esp - 32 is really valid address.
+
+
+
+---- SYNCHRONIZATION ----
+
+>> B5: Explain the basics of your VM synchronization design.  In
+>> particular, explain how it prevents deadlock.  (Refer to the
+>> textbook for an explanation of the necessary conditions for
+>> deadlock.)
+
+To prevent deadlock, at least one of 4 conditions should be false.
+4 conditions are 'mutual_exclusive', 'hold and wait', 'no preemption' and 'circular wait'.
+We broke final condition to prevent deadlock. 
+In our design, process can get every lock in ordered manner.
+We use only swap_lock. because there is one lock, other process can not release existing lock which is held by a process.
+Through this design, we can prevent deadlock.
+
+>> B6: A page fault in process P can cause another process Q's frame
+>> to be evicted.  How do you ensure that Q cannot access or modify
+>> the page during the eviction process?  How do you avoid a race
+>> between P evicting Q's frame and Q faulting the page back in?
+
+We place swap_lock at the beginning and end of swap_out and swap_in.
+So, when swap_in is in process, swap_out can't be executed or vice versa.
+Thus, there is no 
+Therefore, two or more processes can not access one frame at the same time.
+
+
+>> B7: Suppose a page fault in process P causes a page to be read from
+>> the file system or swap.  How do you ensure that a second process Q
+>> cannot interfere by e.g. attempting to evict the frame while it is
+>> still being read in?
+
+Same with B6's answer.
+swap_lock achieves mutual exclusion to frame when swap out and swap in.
+
+
+>> B8: Explain how you handle access to paged-out pages that occur
+>> during system calls.  Do you use page faults to bring in pages (as
+>> in user programs), or do you have a mechanism for "locking" frames
+>> into physical memory, or do you use some other design?  How do you
+>> gracefully handle attempted accesses to invalid virtual addresses?
+
+We use get_user function in check_address to cause page_fault by user, not by kernel.
+In page fault interrupt, that fault address is handled by type of its page entry.
+That is implemented in page_fault function(exception.c).
+
+
+
+---- RATIONALE ----
+
+>> B9: A single lock for the whole VM system would make
+>> synchronization easy, but limit parallelism.  On the other hand,
+>> using many locks complicates synchronization and raises the
+>> possibility for deadlock but allows for high parallelism. Explain
+>> where your design falls along this continuum and why you chose to
+>> design it this way.
+
+To avoid deadlock situation, we used only one lock(swap_lock).
+Although we tried to achive parallelism, but we failed.
+Moreover, we already used many semaphores from project 2-2. we thought that more lock would be hard to control.
+
+
+       MEMORY MAPPED FILES
+       ===================
+
+---- DATA STRUCTURES ----
+
+>> C1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+
+struct mmap_entry{
+    mapid_t mapid;
+    struct file *file;
+    int file_size;
+    uint32_t *start_addr;
+
+    struct list_elem elem;
+};
+-> A struct to store information about a memory mapped file.
+
+struct thread{
+      struct list mmap_table;
+}
+-> A list to store mmap file entries.
+
+---- ALGORITHMS ----
+
+>> C2: Describe how memory mapped files integrate into your virtual
+>> memory subsystem. Explain how the page fault and eviction
+>> processes differ between swap pages and other pages.
+When syscall mmap is called, the file is loaded into mmap_entry.
+
+The informations to be saved is the mapid, the file, and the starting address of the memory.
+When page_fault handler or eviction access to virtual address that mapped with file, a function load_mapped_file is called;
+In that function, the offset is calculated by comparing the fault_addr with the start address.
+Then, read the data of file into the frame, and mapped frame and fault_addr.
+
+
+>> C3: Explain how you determine whether a new file mapping overlaps
+>> any existing segment.
+
+Before processing mmap system call functionality, we check needed pages for new file mapping doesn't exist in supplementary page table and mmap table.
+Because we know size of file, we can calculate how many pages are needed to load file.
+simply, we can get entry pointer to page by increasing start_addr by PGSIZE. 
+we check whether existing supplementary table entry and mmap table entry points to same page for every that pointer.
+Those procedure is done by get_me() function in syscall mmap.
+If there's no such entry, we can say that new file mapping doesn't overlap any existing segment.
+
+
+---- RATIONALE ----
+
+>> C4: Mappings created with "mmap" have similar semantics to those of
+>> data demand-paged from executables, except that "mmap" mappings are
+>> written back to their original files, not to swap.  This implies
+>> that much of their implementation can be shared.  Explain why your
+>> implementation either does or does not share much of the code for
+>> the two situations.
+
+We implemented page table entry and mmap page entry separately.
+Because the timing at which each page entry is created is different.
+supplementary page table entry is created at begining of process, and store the data of executable file.
+mmap table entry is created by calling of syscall mmap, and store the data of user program file.
+Because we manage each page tables separately, 
+table을 구별하여 관리하기 때문에 A function that implements demand paging also exists separately.
+(lazy_load_sement for supplementary page and load_mapped_file for mmap page)
+
+
+         SURVEY QUESTIONS
+         ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?
