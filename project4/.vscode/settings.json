@@ -1,5 +1,7 @@
 {
     "files.associations": {
-        "inode.h": "c"
+        "inode.h": "c",
+        "buffer-cache.h": "c",
+        "malloc.h": "c"
     }
 }

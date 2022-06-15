@@ -26,8 +26,8 @@ struct bc_entry* get_oldest_bc_entry(void);
 
 
 //개별 entry lock 사용됨
-void buffer_read(block_sector_t idx, void* buffer_, off_t bytes_read, off_t size, off_t offset);
-void buffer_write(block_sector_t idx, void* buffer_, off_t bytes_written, off_t size, off_t offset);
+void read_buffer_cache(block_sector_t idx, void* buffer_, off_t bytes_read, off_t size, off_t offset);
+void write_buffer_cache(block_sector_t idx, void* buffer_, off_t bytes_written, off_t size, off_t offset);
 void flush_bc_entry(struct bc_entry* bc);
 void set_bc_entry(struct bc_entry* bc, block_sector_t sector);
 

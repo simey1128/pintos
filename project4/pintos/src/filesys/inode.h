@@ -5,7 +5,24 @@
 #include "filesys/off_t.h"
 #include "devices/block.h"
 
+enum direct_status{
+    DIRECT,
+    SINGLE_INDIRECT,
+    DOUBLE_INDIRECT,
+};
+
 struct bitmap;
+
+struct block_location{
+    enum direct_status direct_status;
+    block_sector_t direct_ofs;
+    block_sector_t single_indirect_ofs;
+    block_sector_t double_indirect_ofs;
+}
+
+struct indirect_block_table{
+    block_sector_t indirect_blocks[INDIRECT_BLOCKS_SIZE];
+}
 
 void inode_init (void);
 bool inode_create (block_sector_t, off_t);
