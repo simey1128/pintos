@@ -5,7 +5,7 @@
 #include "filesys/off_t.h"
 #include "devices/block.h"
 
-#define DIRECT_BLOCKS_SIZE 123
+#define DIRECT_BLOCKS_SIZE 124
 #define INDIRECT_BLOCKS_SIZE 128
 
 enum direct_status{

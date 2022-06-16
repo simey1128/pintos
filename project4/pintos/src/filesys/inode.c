@@ -16,11 +16,8 @@
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
   {
-    // block_sector_t start;               /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    // uint32_t unused[125];               /* Not used. */
-
     block_sector_t direct_blocks[DIRECT_BLOCKS_SIZE];
     block_sector_t single_indirect_block;
     block_sector_t double_indirect_block;
@@ -64,7 +61,7 @@ byte_to_sector (struct inode_disk *inode_disk, off_t pos)
   block_sector_t *tmp_block;
   tmp_block = malloc(BLOCK_SECTOR_SIZE);
   block_sector_t return_sector;
-  struct block_location *block_loc;
+  struct block_location *block_loc = malloc(sizeof *block_loc);
   calc_ofs(pos, block_loc);
 
   switch(block_loc->direct_status){
@@ -85,6 +82,7 @@ byte_to_sector (struct inode_disk *inode_disk, off_t pos)
       return_sector = -1;
   }
   free(tmp_block);
+  free(block_loc);
   return return_sector;
 }
 
@@ -119,7 +117,7 @@ inode_create (block_sector_t sector, off_t length)
   inode_disk = calloc (1, sizeof *inode_disk);
   if (inode_disk != NULL)
     {
-      inode_disk->length = length;
+      
       inode_disk->magic = INODE_MAGIC;
       if(file_growth(inode_disk, 0, length)){
         write_buffer_cache(sector, inode_disk, 0, BLOCK_SECTOR_SIZE ,0);
@@ -128,6 +126,7 @@ inode_create (block_sector_t sector, off_t length)
       free (inode_disk);
       
     }
+  printf("inode_create, success: %d\n", success);
   return success;
 }
 
@@ -283,11 +282,13 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   struct inode_disk* inode_disk = malloc(sizeof(*inode_disk));
   set_inode_disk(inode, inode_disk);
 
+
   lock_acquire(&inode->io_lock);
+  printf("after lock_acquire\n");
   int prev_length = inode_disk->length;
-  int end_loc = offset + size;
-  if(end_loc > prev_length){
-    file_growth(inode_disk, prev_length, end_loc);
+  int end_loc = offset + size -1;
+  if(end_loc > prev_length-1){
+    file_growth(inode_disk, prev_length, offset+size);
   }
   lock_release(&inode->io_lock);
 
@@ -340,11 +341,16 @@ inode_allow_write (struct inode *inode)
 }
 
 /* Returns the length, in bytes, of INODE's data. */
-// off_t
-// inode_length (const struct inode *inode)
-// {
-//   return inode->data.length;
-// }
+off_t
+inode_length (const struct inode *inode)
+{
+  struct inode_disk* inode_disk = malloc(sizeof(*inode_disk));
+  read_buffer_cache(inode->sector, inode_disk, 0, BLOCK_SECTOR_SIZE, 0);
+  
+  off_t length = inode_disk->length;
+  free(inode_disk);
+  return length;
+}
 
 static void set_inode_disk(struct inode *inode, struct inode_disk *inode_disk){
   read_buffer_cache(inode->sector, inode_disk, 0, BLOCK_SECTOR_SIZE, 0);
@@ -354,20 +360,20 @@ static void set_inode_disk(struct inode *inode, struct inode_disk *inode_disk){
 파일의 크기에 맞게 index block안에서 ofs을 계산하여 update함
 */
 static void calc_ofs(off_t file_size, struct block_location *block_loc){
-  off_t file_sector = file_size / BLOCK_SECTOR_SIZE;
-  if(file_sector < DIRECT_BLOCKS_SIZE){
+  if(file_size < DIRECT_BLOCKS_SIZE * BLOCK_SECTOR_SIZE){
     block_loc -> direct_status = DIRECT;
-    block_loc -> direct_ofs = file_sector;
-  }else if(file_sector < DIRECT_BLOCKS_SIZE + INDIRECT_BLOCKS_SIZE){
+    block_loc -> direct_ofs = file_size;
+  }else if(file_size < (DIRECT_BLOCKS_SIZE + INDIRECT_BLOCKS_SIZE)* BLOCK_SECTOR_SIZE){
     block_loc -> direct_status = SINGLE_INDIRECT;
-    block_loc -> single_indirect_ofs = file_sector - DIRECT_BLOCKS_SIZE;
-  }else if(file_sector < DIRECT_BLOCKS_SIZE + INDIRECT_BLOCKS_SIZE + INDIRECT_BLOCKS_SIZE * INDIRECT_BLOCKS_SIZE){
+    block_loc -> single_indirect_ofs = file_size % DIRECT_BLOCKS_SIZE ;
+  }else{
     block_loc -> direct_status = DOUBLE_INDIRECT;
     // single_indirect_ofs: block을 가리킴
-    block_loc -> single_indirect_ofs = (file_sector - DIRECT_BLOCKS_SIZE) % INDIRECT_BLOCKS_SIZE;
+    block_loc -> single_indirect_ofs = file_size % INDIRECT_BLOCKS_SIZE;
     // double_indirect_ofs: block table을 가리킴
-    block_loc -> double_indirect_ofs = (file_sector - DIRECT_BLOCKS_SIZE - block_loc->single_indirect_ofs) / INDIRECT_BLOCKS_SIZE;
+    block_loc -> double_indirect_ofs = (file_size - block_loc->single_indirect_ofs) / INDIRECT_BLOCKS_SIZE;
   }
+
 }
 
 /*
@@ -391,8 +397,9 @@ static bool inode_disk_growth(struct inode_disk *inode_disk, block_sector_t new_
       read_buffer_cache(tmp_idx, tmp_block, 0, BLOCK_SECTOR_SIZE, 0);
       *(tmp_block + block_loc->single_indirect_ofs) = new_block;
       write_buffer_cache(tmp_idx, tmp_block, 0, BLOCK_SECTOR_SIZE, 0);
-    default:
+    default:{
       return false;
+    }
   }
   free(tmp_block);
   return true;
@@ -403,7 +410,7 @@ static bool inode_disk_growth(struct inode_disk *inode_disk, block_sector_t new_
 파일이 growth한 것을 inode에 반영하기
 */
 static bool file_growth(struct inode_disk* inode_disk, off_t start_loc, off_t end_loc){
-  block_sector_t existing_sector = byte_to_sector(inode_disk, start_loc);
+  block_sector_t existing_sector = byte_to_sector(inode_disk, end_loc);
   int size = end_loc - start_loc;
   inode_disk->length += size;
   int offset = start_loc;
@@ -420,18 +427,16 @@ static bool file_growth(struct inode_disk* inode_disk, off_t start_loc, off_t en
     size -= temp_size;
     offset += temp_size;
   }
-
   while(size > 0){
     int sector_ofs = offset % BLOCK_SECTOR_SIZE;
     int temp_size = size < BLOCK_SECTOR_SIZE ? size : BLOCK_SECTOR_SIZE;
 
     block_sector_t new_block;
     if(free_map_allocate(1, &new_block)){
-
-      struct block_location *block_loc;
+      struct block_location *block_loc = malloc(sizeof *block_loc);
       calc_ofs(offset + temp_size, block_loc);
-
       inode_disk_growth(inode_disk, new_block, block_loc);
+      free(block_loc);
     }else{
       return false;
     }
@@ -440,8 +445,6 @@ static bool file_growth(struct inode_disk* inode_disk, off_t start_loc, off_t en
     size -= temp_size;
     offset += temp_size;
   }
-
-
 
   return true;
 }
