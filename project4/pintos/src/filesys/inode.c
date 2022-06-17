@@ -360,20 +360,20 @@ static void set_inode_disk(struct inode *inode, struct inode_disk *inode_disk){
 파일의 크기에 맞게 index block안에서 ofs을 계산하여 update함
 */
 static void calc_ofs(off_t file_size, struct block_location *block_loc){
-  if(file_size < DIRECT_BLOCKS_SIZE * BLOCK_SECTOR_SIZE){
+  block_sector_t file_sec = (file_size - 1) / BLOCK_SECTOR_SIZE + 1;
+  if(file_sec < DIRECT_BLOCKS_SIZE){
     block_loc -> direct_status = DIRECT;
-    block_loc -> direct_ofs = file_size;
-  }else if(file_size < (DIRECT_BLOCKS_SIZE + INDIRECT_BLOCKS_SIZE)* BLOCK_SECTOR_SIZE){
+    block_loc -> direct_ofs = file_sec;
+  }else if(file_sec < (DIRECT_BLOCKS_SIZE + INDIRECT_BLOCKS_SIZE)){
     block_loc -> direct_status = SINGLE_INDIRECT;
-    block_loc -> single_indirect_ofs = file_size % DIRECT_BLOCKS_SIZE ;
+    block_loc -> single_indirect_ofs = file_sec - DIRECT_BLOCKS_SIZE;
   }else{
     block_loc -> direct_status = DOUBLE_INDIRECT;
     // single_indirect_ofs: block을 가리킴
-    block_loc -> single_indirect_ofs = file_size % INDIRECT_BLOCKS_SIZE;
+    block_loc -> single_indirect_ofs = file_sec % INDIRECT_BLOCKS_SIZE;
     // double_indirect_ofs: block table을 가리킴
-    block_loc -> double_indirect_ofs = (file_size - block_loc->single_indirect_ofs) / INDIRECT_BLOCKS_SIZE;
+    block_loc -> double_indirect_ofs = (file_sec - block_loc->single_indirect_ofs) / INDIRECT_BLOCKS_SIZE;
   }
-
 }
 
 /*
@@ -382,9 +382,10 @@ static void calc_ofs(off_t file_size, struct block_location *block_loc){
 static bool inode_disk_growth(struct inode_disk *inode_disk, block_sector_t new_block, struct block_location *block_loc){
   block_sector_t *tmp_block;
   tmp_block = malloc(BLOCK_SECTOR_SIZE);
+  
   switch(block_loc->direct_status){
     case DIRECT:
-      inode_disk -> direct_blocks[block_loc->direct_ofs + 1] = new_block;
+      inode_disk -> direct_blocks[block_loc->direct_ofs] = new_block;
       break;
     case SINGLE_INDIRECT:
       read_buffer_cache(inode_disk->single_indirect_block, tmp_block, 0, BLOCK_SECTOR_SIZE, 0);
