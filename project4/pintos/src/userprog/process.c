@@ -107,6 +107,7 @@ start_process (void *cmd_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (argv[0], &if_.eip, &if_.esp);
+  printf("load success!!!!: %d\n", success);
 
 
   if(success){

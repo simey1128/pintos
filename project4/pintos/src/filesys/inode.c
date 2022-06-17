@@ -54,7 +54,7 @@ struct inode
 static block_sector_t
 byte_to_sector (struct inode_disk *inode_disk, off_t pos) 
 {
-  if(pos >= inode_disk->length){
+  if(pos > inode_disk->length){
     return -1;
   }
 
@@ -119,6 +119,7 @@ inode_create (block_sector_t sector, off_t length)
     {
       
       inode_disk->magic = INODE_MAGIC;
+      inode_disk->length = length;
       if(file_growth(inode_disk, 0, length)){
         write_buffer_cache(sector, inode_disk, 0, BLOCK_SECTOR_SIZE ,0);
         success = true;
@@ -237,12 +238,13 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 
   while (size > 0) 
     {
+      // printf("buffer: %p\n", buffer);
       /* Disk sector to read, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode_disk, offset);
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
-      off_t inode_left = inode_length (inode) - offset;
+      off_t inode_left = inode_disk->length - offset;
       int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
       int min_left = inode_left < sector_left ? inode_left : sector_left;
 
@@ -251,8 +253,9 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       if (chunk_size <= 0)
         break;
 
-
       read_buffer_cache(sector_idx, buffer, bytes_read, chunk_size, sector_ofs);
+      // printf("read!!!!!!\n");
+      // printf("sector_idx: %d, buffer: %p, bytes_read: %d, sector_ofs: %d\n", sector_idx, buffer, bytes_read, sector_ofs);
       
       /* Advance. */
       size -= chunk_size;
@@ -284,10 +287,9 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 
 
   lock_acquire(&inode->io_lock);
-  printf("after lock_acquire\n");
   int prev_length = inode_disk->length;
-  int end_loc = offset + size -1;
-  if(end_loc > prev_length-1){
+  int end_loc = offset + size;
+  if(end_loc > prev_length){
     file_growth(inode_disk, prev_length, offset+size);
   }
   lock_release(&inode->io_lock);
@@ -299,7 +301,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
-      off_t inode_left = inode_length (inode) - offset;
+      off_t inode_left = inode_disk->length - offset;
       int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
       int min_left = inode_left < sector_left ? inode_left : sector_left;
 
@@ -309,6 +311,8 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
         break;
 
       write_buffer_cache(sector_idx, buffer, bytes_written, chunk_size, sector_ofs);
+      // printf("write!!!\n");
+      // printf("sector_idx: %d, buffer: %p, bytes_written: %d, sector_ofs: %d\n", sector_idx, buffer, bytes_written, sector_ofs);
 
       /* Advance. */
       size -= chunk_size;
@@ -398,6 +402,7 @@ static bool inode_disk_growth(struct inode_disk *inode_disk, block_sector_t new_
       read_buffer_cache(tmp_idx, tmp_block, 0, BLOCK_SECTOR_SIZE, 0);
       *(tmp_block + block_loc->single_indirect_ofs) = new_block;
       write_buffer_cache(tmp_idx, tmp_block, 0, BLOCK_SECTOR_SIZE, 0);
+      break;
     default:{
       return false;
     }
