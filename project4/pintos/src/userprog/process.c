@@ -107,7 +107,6 @@ start_process (void *cmd_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (argv[0], &if_.eip, &if_.esp);
-  printf("load success!!!!: %d\n", success);
 
 
   if(success){
@@ -364,7 +363,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
     {
       struct Elf32_Phdr phdr;
 
-      printf("file_ofs > file_length (file): %d\n",file_ofs > file_length (file));
       if (file_ofs < 0 || file_ofs > file_length (file))
         goto done;
       file_seek (file, file_ofs);

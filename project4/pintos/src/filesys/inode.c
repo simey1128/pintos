@@ -54,8 +54,7 @@ struct inode
 static block_sector_t
 byte_to_sector (struct inode_disk *inode_disk, off_t pos) 
 {
-  // printf("pos: %d, inode_disk->length: %d\n", pos, inode_disk->length);
-  if(pos > inode_disk->length){
+  if(pos >= inode_disk->length){
     return -1;
   }
 
@@ -64,7 +63,6 @@ byte_to_sector (struct inode_disk *inode_disk, off_t pos)
   block_sector_t return_sector;
   struct block_location *block_loc = malloc(sizeof *block_loc);
   calc_ofs(pos, block_loc);
-
   switch(block_loc->direct_status){
     case DIRECT:
       return_sector = inode_disk->direct_blocks[block_loc->direct_ofs];
@@ -128,7 +126,6 @@ inode_create (block_sector_t sector, off_t length)
       free (inode_disk);
       
     }
-  printf("inode_create, success: %d\n", success);
   return success;
 }
 
@@ -236,24 +233,17 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
   
   struct inode_disk* inode_disk = malloc(sizeof(*inode_disk));
   set_inode_disk(inode, inode_disk);
-  printf("inode_disk->length: %d\n", inode_disk->length);
 
   while (size > 0) 
     {
-      printf("in while!\n");
       // printf("buffer: %p\n", buffer);
       /* Disk sector to read, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode_disk, offset);
-      printf("offset: %d\n",offset);
-      printf("sector_idx: %d\n", sector_idx);
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
       off_t inode_left = inode_disk->length - offset;
       int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
-      printf("sector_left: %d\n", sector_left);
-      printf("inode_left: %d\n", inode_left);
-      printf("size: %d\n", size);
       int min_left = inode_left < sector_left ? inode_left : sector_left;
 
       /* Number of bytes to actually copy out of this sector. */
@@ -261,10 +251,8 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       
       if (chunk_size <= 0)
         {
-          
           break;
         }
-      printf("chunk_size: %d\n", chunk_size);
       read_buffer_cache(sector_idx, buffer, bytes_read, chunk_size, sector_ofs);
       // printf("read!!!!!!\n");
       // printf("sector_idx: %d, buffer: %p, bytes_read: %d, sector_ofs: %d\n", sector_idx, buffer, bytes_read, sector_ofs);
@@ -275,7 +263,6 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       bytes_read += chunk_size;
     }
 
-  printf("bytes_read: %d\n", bytes_read);
   return bytes_read;
 }
 
@@ -302,7 +289,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   lock_acquire(&inode->io_lock);
   int prev_length = inode_disk->length;
   int end_loc = offset + size;
-  if(end_loc > prev_length){
+  if(end_loc -1 > prev_length -1){
     file_growth(inode_disk, prev_length, offset+size);
   }
   lock_release(&inode->io_lock);
@@ -377,10 +364,11 @@ static void set_inode_disk(struct inode *inode, struct inode_disk *inode_disk){
 파일의 크기에 맞게 index block안에서 ofs을 계산하여 update함
 */
 static void calc_ofs(off_t file_size, struct block_location *block_loc){
-  block_sector_t file_sec = (file_size) / BLOCK_SECTOR_SIZE ;
+  block_sector_t file_sec = ((file_size) / BLOCK_SECTOR_SIZE);
   if(file_sec < DIRECT_BLOCKS_SIZE){
     block_loc -> direct_status = DIRECT;
     block_loc -> direct_ofs = file_sec;
+
   }else if(file_sec < (DIRECT_BLOCKS_SIZE + INDIRECT_BLOCKS_SIZE)){
     block_loc -> direct_status = SINGLE_INDIRECT;
     block_loc -> single_indirect_ofs = file_sec - DIRECT_BLOCKS_SIZE;
@@ -429,15 +417,13 @@ static bool inode_disk_growth(struct inode_disk *inode_disk, block_sector_t new_
 파일이 growth한 것을 inode에 반영하기
 */
 static bool file_growth(struct inode_disk* inode_disk, off_t start_loc, off_t end_loc){
-  block_sector_t existing_sector = byte_to_sector(inode_disk, end_loc);
-  printf("existing_sector: %d\n",existing_sector);
+  block_sector_t existing_sector = byte_to_sector(inode_disk, start_loc);
   int size = end_loc - start_loc;
-  printf("size: %d\n", size);
   inode_disk->length += size;
   int offset = start_loc;
 
-  int zeros[BLOCK_SECTOR_SIZE];
-  memset(zeros, 0, BLOCK_SECTOR_SIZE);
+  static char zeros[BLOCK_SECTOR_SIZE];
+  // memset(zeros, 0, BLOCK_SECTOR_SIZE);
 
   if(existing_sector != -1){
     
@@ -457,7 +443,7 @@ static bool file_growth(struct inode_disk* inode_disk, off_t start_loc, off_t en
     block_sector_t new_block;
     if(free_map_allocate(1, &new_block)){
       struct block_location *block_loc = malloc(sizeof *block_loc);
-      calc_ofs(offset + temp_size, block_loc);
+      calc_ofs(offset + temp_size - BLOCK_SECTOR_SIZE, block_loc);
       inode_disk_growth(inode_disk, new_block, block_loc);
       free(block_loc);
     }else{
