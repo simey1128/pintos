@@ -81,6 +81,7 @@ file_read (struct file *file, void *buffer, off_t size)
 off_t
 file_read_at (struct file *file, void *buffer, off_t size, off_t file_ofs) 
 {
+  printf("size: %d\n", size);
   return inode_read_at (file->inode, buffer, size, file_ofs);
 }
 
