@@ -73,7 +73,6 @@ static block_sector_t
 byte_to_sector (const struct inode_disk *inode_disk, off_t pos) 
 {
   block_sector_t result;
-
   if(pos < inode_disk->length){
     struct indirect_table *indirect_table;
     struct block_table_ofs* block_table_ofs = malloc(sizeof(*block_table_ofs));
@@ -87,9 +86,11 @@ byte_to_sector (const struct inode_disk *inode_disk, off_t pos)
       case SINGLE_INDIRECT:
         indirect_table = (struct indirect_table*)malloc(BLOCK_SECTOR_SIZE);
         if(indirect_table){
-          read_buffer_cache(inode_disk->single_indirect_table_sec, indirect_table, 0, BLOCK_SECTOR_SIZE, 0);
+          read_buffer_cache(inode_disk->single_indirect_table_sec, indirect_table->entries, 0, BLOCK_SECTOR_SIZE, 0);
           result = indirect_table->entries[block_table_ofs->inner_table_ofs];
-        }else result = 0;
+        }else {
+          result = 0;
+        }
 
         free(indirect_table);
         break;
@@ -299,7 +300,6 @@ off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 off_t offset) 
 {
-  
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
   uint8_t *bounce = NULL;
@@ -318,6 +318,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   if(write_end>prev_length -1){
     inode_disk->length = offset + size;
     file_growth(inode_disk, prev_length, offset+size);
+    write_buffer_cache(inode->sector, inode_disk, 0, BLOCK_SECTOR_SIZE, 0);
   }
   lock_release(&inode->io_lock);
 
@@ -344,7 +345,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       offset += chunk_size;
       bytes_written += chunk_size;
     }
-  write_buffer_cache(inode->sector, inode_disk, 0, BLOCK_SECTOR_SIZE, 0);
+  // write_buffer_cache(inode->sector, inode_disk, 0, BLOCK_SECTOR_SIZE, 0);
 
   return bytes_written;
 }
@@ -417,10 +418,9 @@ static bool update_inode_disk(struct inode_disk* inode_disk, block_sector_t new_
     case SINGLE_INDIRECT:
       indirect_table = (struct indirect_table*)malloc(BLOCK_SECTOR_SIZE);
       if(indirect_table == NULL) return false;
-
-      read_buffer_cache(inode_disk->single_indirect_table_sec, indirect_table, 0, BLOCK_SECTOR_SIZE, 0);
+      read_buffer_cache(inode_disk->single_indirect_table_sec, indirect_table->entries, 0, BLOCK_SECTOR_SIZE, 0);
       indirect_table->entries[block_table_ofs->inner_table_ofs] = new_block;
-      write_buffer_cache(inode_disk->single_indirect_table_sec, indirect_table, 0, BLOCK_SECTOR_SIZE, 0);
+      write_buffer_cache(inode_disk->single_indirect_table_sec, indirect_table->entries, 0, BLOCK_SECTOR_SIZE, 0);
       break;
 
     case DOUBLE_INDIRECT:
@@ -487,26 +487,33 @@ static bool file_growth(struct inode_disk* inode_disk, off_t start_loc, off_t en
   static char zeros[BLOCK_SECTOR_SIZE];
 
   while(size > 0){
+    
     int sector_loc = location % BLOCK_SECTOR_SIZE;
     size_t chunk_size = size < BLOCK_SECTOR_SIZE ? size : BLOCK_SECTOR_SIZE;
 
     if(sector_loc > 0){
       block_sector_t existing_block = byte_to_sector(inode_disk, location);
       write_buffer_cache(existing_block, zeros, 0, BLOCK_SECTOR_SIZE - sector_loc, sector_loc);
+      size -= BLOCK_SECTOR_SIZE - sector_loc;
+      location += BLOCK_SECTOR_SIZE - sector_loc;
     }else {
       block_sector_t new_block;
       if(free_map_allocate(1, &new_block)){
         struct block_table_ofs *block_table_ofs = (struct block_table_ofs*)malloc(BLOCK_SECTOR_SIZE);
         set_block_table_ofs(location, block_table_ofs);
+
+        if(block_table_ofs->access_type == SINGLE_INDIRECT && block_table_ofs->inner_table_ofs == 0){
+          free_map_allocate(1, &inode_disk->single_indirect_table_sec);
+        }
         update_inode_disk(inode_disk, new_block, block_table_ofs);
       }else{
         return false;
       }
       write_buffer_cache(new_block, zeros, 0, BLOCK_SECTOR_SIZE, 0);
-      
+      size -= chunk_size;
+      location += chunk_size;
     }
-    size -= chunk_size;
-    location += chunk_size;
+    
   }
   // free(zeros);
   return true;
