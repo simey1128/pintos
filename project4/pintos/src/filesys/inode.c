@@ -52,11 +52,11 @@ struct inode
    Returns -1 if INODE does not contain data for a byte at offset
    POS. */
 static block_sector_t
-byte_to_sector (struct inode_disk *inode_disk, off_t pos) 
+byte_to_sector (struct inode_disk *inode_disk, off_t pos) //pos == start_loc
 {
-  if(pos >= inode_disk->length){
-    return -1;
-  }
+  off_t temp = BLOCK_SECTOR_SIZE-(inode_disk->length % BLOCK_SECTOR_SIZE);
+
+  if(!(pos<inode_disk->length)) return -1;
 
   block_sector_t *tmp_block;
   tmp_block = malloc(BLOCK_SECTOR_SIZE);
@@ -116,12 +116,14 @@ inode_create (block_sector_t sector, off_t length)
   inode_disk = calloc (1, sizeof *inode_disk);
   if (inode_disk != NULL)
     {
-      
       inode_disk->magic = INODE_MAGIC;
-      // inode_disk->length = length;
-      if(file_growth(inode_disk, 0, length)){
+      inode_disk->length = length;
+      if(length>0){
+        if(file_growth(inode_disk, 0, length)){
+
         write_buffer_cache(sector, inode_disk, 0, BLOCK_SECTOR_SIZE ,0);
         success = true;
+      }
       }
       free (inode_disk);
       
@@ -285,14 +287,14 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   struct inode_disk* inode_disk = malloc(sizeof(*inode_disk));
   set_inode_disk(inode, inode_disk);
 
-
   lock_acquire(&inode->io_lock);
   int prev_length = inode_disk->length;
-  int end_loc = offset + size;
-  if(end_loc -1 > prev_length -1){
+  int end_loc = offset + size -1;
+  if(end_loc > prev_length -1){
     file_growth(inode_disk, prev_length, offset+size);
   }
   lock_release(&inode->io_lock);
+  
 
   while (size > 0) 
     {
@@ -363,8 +365,8 @@ static void set_inode_disk(struct inode *inode, struct inode_disk *inode_disk){
 /*
 파일의 크기에 맞게 index block안에서 ofs을 계산하여 update함
 */
-static void calc_ofs(off_t file_size, struct block_location *block_loc){
-  block_sector_t file_sec = ((file_size) / BLOCK_SECTOR_SIZE);
+static void calc_ofs(off_t file_pos, struct block_location *block_loc){
+  block_sector_t file_sec = ((file_pos) / BLOCK_SECTOR_SIZE);
   if(file_sec < DIRECT_BLOCKS_SIZE){
     block_loc -> direct_status = DIRECT;
     block_loc -> direct_ofs = file_sec;
@@ -417,39 +419,37 @@ static bool inode_disk_growth(struct inode_disk *inode_disk, block_sector_t new_
 파일이 growth한 것을 inode에 반영하기
 */
 static bool file_growth(struct inode_disk* inode_disk, off_t start_loc, off_t end_loc){
-  block_sector_t existing_sector = byte_to_sector(inode_disk, start_loc);
   int size = end_loc - start_loc;
-  inode_disk->length += size;
   int offset = start_loc;
 
   static char zeros[BLOCK_SECTOR_SIZE];
-  // memset(zeros, 0, BLOCK_SECTOR_SIZE);
 
-  if(existing_sector != -1){
-    
-    // 기존에 존재하는 block에서 남은부분 채우고
-    int sector_ofs = offset % BLOCK_SECTOR_SIZE;
-    int temp_size = BLOCK_SECTOR_SIZE - sector_ofs;
-
-    write_buffer_cache(existing_sector, zeros, 0, temp_size, sector_ofs);
-    size -= temp_size;
-    offset += temp_size;
-  }
   while(size > 0){
     
     int sector_ofs = offset % BLOCK_SECTOR_SIZE;
     int temp_size = size < BLOCK_SECTOR_SIZE ? size : BLOCK_SECTOR_SIZE;
-
-    block_sector_t new_block;
-    if(free_map_allocate(1, &new_block)){
-      struct block_location *block_loc = malloc(sizeof *block_loc);
-      calc_ofs(offset + temp_size - BLOCK_SECTOR_SIZE, block_loc);
-      inode_disk_growth(inode_disk, new_block, block_loc);
-      free(block_loc);
+    
+    if(sector_ofs > 0){
+      // block_sector_t existing_block = byte_to_sector(inode_disk, offset);
+      // if(existing_block == -1){
+      //   printf("existing_block == -1\n");
+      //   return false;
+      // }
+      // write_buffer_cache(existing_block, zeros, 0, BLOCK_SECTOR_SIZE-sector_ofs, offset);
     }else{
-      return false;
+      block_sector_t new_block;
+      if(free_map_allocate(1, &new_block)){
+        struct block_location *block_loc = malloc(sizeof *block_loc);
+        calc_ofs(offset, block_loc);
+        inode_disk_growth(inode_disk, new_block, block_loc);
+        free(block_loc);
+      }else{
+        free(zeros);
+        return false;
+      }
+
+      write_buffer_cache(new_block, zeros, 0, BLOCK_SECTOR_SIZE, 0);
     }
-    write_buffer_cache(new_block, zeros, 0, temp_size, 0);
 
     size -= temp_size;
     offset += temp_size;
