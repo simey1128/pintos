@@ -5,6 +5,9 @@
 #include "filesys/off_t.h"
 #include "devices/block.h"
 
+#define DIRECT_BLOCK_SIZE 123
+#define INDIRECT_BLOCK_SIZE 128
+
 struct bitmap;
 
 void inode_init (void);
@@ -19,5 +22,7 @@ off_t inode_write_at (struct inode *, const void *, off_t size, off_t offset);
 void inode_deny_write (struct inode *);
 void inode_allow_write (struct inode *);
 off_t inode_length (const struct inode *);
+
+
 
 #endif /* filesys/inode.h */
