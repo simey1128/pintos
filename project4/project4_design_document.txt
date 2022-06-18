@@ -8,9 +8,8 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Eunyeong Sim <simey1128@unist.ac.kr>
+Jaeeun Eom <eomjaeeun@unist.ac.kr>
 
 ---- PRELIMINARIES ----
 
@@ -30,20 +29,68 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+enum access_type {
+  DIRECT,
+  SINGLE_INDIRECT,
+  DOUBLE_INDIRECT
+};
+-> Defines the types that indicates whether the length of the current file is.
+
+struct block_table_ofs{
+  enum access_type access_type;
+  off_t inner_table_ofs;
+  off_t outer_table_ofs;
+};
+-> The set of offsets indicating where a file is located in a direct or indirect partition.
+
+struct indirect_table{
+  block_sector_t entries[INDIRECT_BLOCK_SIZE];
+};
+-> The struct that store the single and double indirect tables.
+
+struct inode_disk
+  {
+    block_sector_t direct_table[DIRECT_BLOCK_SIZE];
+    block_sector_t single_indirect_table_sec;
+    block_sector_t double_indirect_table_sec;
+  };
+-> The struct that stores the direct blocks and the location of the indirect tables.
+
+struct inode 
+  {
+    struct lock io_lock;
+  };
+-> A lock that prevents multiple processes from exteding a file at the same time.
+
 >> A2: What is the maximum size of a file supported by your inode
 >> structure?  Show your work.
+
+Our file partitions consist of direct, single-indirect, and double-indirect.
+First, the direct part occupies 123 blocks.
+And a single-indirect block occupies 128 blocks.
+A double-indirect block occupies 128 block tables consisting of 128 blocks.
+Therefore, the total number of blocks is 123 + 128 + 128 * 128 = 16,635,
+16,635 * 512 = 8,517,120 bytes.
 
 ---- SYNCHRONIZATION ----
 
 >> A3: Explain how your code avoids a race if two processes attempt to
 >> extend a file at the same time.
 
+After the gile is created, file growth occurs when a write is requested to a position larger than the size of the current file.
+So, in the inode_write_at function, we protect the series of jobs -saving the current size of the file in variable 'prev_length', allocating the file to the buffer cache up to the requested size, and performing the write operation- with io_lock.
+Thus, race conditions between processes could be avoided.
+
 >> A4: Suppose processes A and B both have file F open, both
 >> positioned at end-of-file.  If A reads and B writes F at the same
 >> time, A may read all, part, or none of what B writes.  However, A
 >> may not read data other than what B writes, e.g. if B writes
->> nonzero data, A is not allowed to see all zeros.  Explain how your
+>> nonzero data, A is not allowed to see all zeros. Explain how your
 >> code avoids this race.
+
+As will be explained in question A5 below, we will synchronize the read and write operations of a file on a block-by-block basis.
+The only thing protected by io_lock is file_growth.
+Therefore, immediately after the new part of the file is expanded, it can be read and written by another process.
 
 >> A5: Explain how your synchronization design provides "fairness".
 >> File access is "fair" if readers cannot indefinitely block writers
@@ -52,6 +99,11 @@ FirstName LastName <email@domain.example>
 >> processes writing to a file cannot prevent another process forever
 >> from reading the file.
 
+In our codes, all read and write operations are performed in the buffer cache after file is loaded into the bufer cache.
+We make read and write operations proceed in units of one block through read_buffer_cache and write_buffer_cache.
+Both functions avoid race condition by using lock of bc_entry struct.
+Therefore, our codes provides fairness that synchronization of read and write operations is performed in blocks.
+
 ---- RATIONALE ----
 
 >> A6: Is your inode structure a multilevel index?  If so, why did you
@@ -59,6 +111,13 @@ FirstName LastName <email@domain.example>
 >> indirect blocks?  If not, why did you choose an alternative inode
 >> structure, and what advantages and disadvantages does your
 >> structure have, compared to a multilevel index?
+
+We used a multilevel index.
+There are 123 direct blocks.
+Because the information of direct blocks is kept in the inode_disk struct which must fit into one block.
+Therefore, direct blocks are allocated to 123 blocks of space excluding the remaining five member variables.
+There are 128 indirect block tables for single and double each.
+Since all entries must be stored in one block as well, the block_sector_t type is set to 128, which is the maximum number that can be entered in one block.
 
 			    SUBDIRECTORIES
 			    ==============
